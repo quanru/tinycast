@@ -2,7 +2,7 @@ diff --git a/Tinycast/Palette/PalettePanel.swift b/Tinycast/Palette/PalettePanel
 index 754084c..3e5ccf9 100644
 --- a/Tinycast/Palette/PalettePanel.swift
 +++ b/Tinycast/Palette/PalettePanel.swift
-@@ -176,6 +176,18 @@ final class PalettePanel: NSPanel {
+@@ -176,6 +176,19 @@ final class PalettePanel: NSPanel {
          {
              return
          }
@@ -14,6 +14,7 @@ index 754084c..3e5ccf9 100644
 +            if event.type == .keyDown, Int(event.keyCode) == kVK_Delete,
 +                UserDefaults.standard.bool(forKey: "imeBackspaceCISimulateMarkedText")
 +            {
++                paletteState?.query = ""
 +                paletteState?.isComposing = true
 +                paletteState?.noteEditingField(false)
 +            }
