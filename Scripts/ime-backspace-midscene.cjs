@@ -102,6 +102,8 @@ async function main() {
     );
     summary.chatBeforeComposition = chat;
 
+    await agent.callActionInActionSpace('KeyboardPress', { keyName: 'Control+Space' });
+    await sleep(1_000);
     await agent.callActionInActionSpace('Input', { value: 'nihao', mode: 'typeOnly' });
     await sleep(500);
     summary.composing = focusedField(helper, bundleID);
