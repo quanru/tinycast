@@ -120,12 +120,23 @@ async function main() {
     summary.chatBeforeComposition = chat;
 
     summary.inputSource = execFileSync(helper, ['current-input-source'], { encoding: 'utf8' }).trim();
-    if (!summary.inputSource.includes('com.apple.inputmethod.SCIM.ITABC')) {
+    // While SCIM.ITABC is active, macOS may expose its bundled, non-user-
+    // selectable PinyinKeyboard as the current keyboard source.
+    const isSimplifiedPinyin = [
+      'com.apple.inputmethod.SCIM.ITABC',
+      'com.apple.keylayout.PinyinKeyboard',
+    ].some((identifier) => summary.inputSource.includes(identifier));
+    if (!isSimplifiedPinyin) {
       throw new Error(`Expected Simplified Pinyin input method, got ${summary.inputSource}`);
     }
     await agent.callActionInActionSpace('Input', { value: 'nihao', mode: 'typeOnly' });
-    await sleep(500);
+    await sleep(1_000);
     summary.composing = focusedField(helper, bundleID);
+    const composingScreenshot = await device.screenshotBase64();
+    await writeFile(
+      path.join(outputDir, 'during-composition.png'),
+      screenshotBuffer(composingScreenshot),
+    );
 
     await agent.callActionInActionSpace('KeyboardPress', { keyName: 'Backspace' });
     const result = await waitForFocusedField(
