@@ -20,11 +20,9 @@ jobs:
       matrix:
         include:
           - label: before
-            target_ref: 5a787533eceb9833e5cba4628433b21f67e97956
             expected_placeholder: Search for apps and commands
             bundle_id: com.tinycast.ime-ci.before
           - label: after
-            target_ref: ${{ github.sha }}
             expected_placeholder: Ask anything
             bundle_id: com.tinycast.ime-ci.after
     env:
@@ -57,19 +55,6 @@ jobs:
             osascript -e 'tell application "System Events" to return UI elements enabled'
           } | tee "$EVIDENCE_OUTPUT_DIR/runner-environment.log"
 
-      - name: Prepare source under test
-        shell: bash
-        run: |
-          SOURCE="$RUNNER_TEMP/tinycast-${EVIDENCE_LABEL}"
-          git worktree add --detach "$SOURCE" "${{ matrix.target_ref }}"
-          if [[ "$EVIDENCE_LABEL" == before ]]; then
-            # Keep the comparison limited to the IME fix while allowing the old
-            # revision to compile with Xcode 26.6 on the Intel GUI runner.
-            git show "${{ github.sha }}:Tinycast/DesignSystem/Scrolling/OverflowFade.swift" \
-              > "$SOURCE/Tinycast/DesignSystem/Scrolling/OverflowFade.swift"
-          fi
-          echo "SOURCE=$SOURCE" >> "$GITHUB_ENV"
-
       - uses: actions/setup-node@v6
         with:
           node-version: 24
@@ -90,29 +75,22 @@ jobs:
             -o "$RUNNER_TEMP/ime-backspace-ci"
           echo "IME_CI_HELPER=$RUNNER_TEMP/ime-backspace-ci" >> "$GITHUB_ENV"
 
-      - name: Build Tinycast
+      - name: Build AppKit reproducer
         shell: bash
         run: |
-          PRODUCT_NAME="Tinycast IME ${EVIDENCE_LABEL}"
-          DERIVED_DATA="$RUNNER_TEMP/DerivedData-${EVIDENCE_LABEL}"
-          xcodebuild -project "$SOURCE/Tinycast.xcodeproj" -scheme Tinycast -configuration Debug \
-            -derivedDataPath "$DERIVED_DATA" \
-            CODE_SIGNING_ALLOWED=NO PRODUCT_NAME="$PRODUCT_NAME" \
-            PRODUCT_BUNDLE_IDENTIFIER="$APP_BUNDLE_ID" build
-          APP_PATH="$DERIVED_DATA/Build/Products/Debug/${PRODUCT_NAME}.app"
-          test -d "$APP_PATH"
+          APP_PATH="$RUNNER_TEMP/Tinycast IME ${EVIDENCE_LABEL}.app"
+          mkdir -p "$APP_PATH/Contents/MacOS"
+          cp Scripts/ime-backspace-harness-Info.plist "$APP_PATH/Contents/Info.plist"
+          plutil -replace CFBundleIdentifier -string "$APP_BUNDLE_ID" "$APP_PATH/Contents/Info.plist"
+          xcrun swiftc Scripts/ime-backspace-harness.swift Tinycast/Palette/PaletteEscapeAction.swift \
+            -framework AppKit -framework Carbon \
+            -o "$APP_PATH/Contents/MacOS/TinycastIMEHarness"
+          codesign --force --sign - "$APP_PATH"
           echo "APP_PATH=$APP_PATH" >> "$GITHUB_ENV"
 
-      - name: Prepare Tinycast and Chinese Pinyin
+      - name: Prepare Chinese Pinyin
         shell: bash
         run: |
-          defaults write "$APP_BUNDLE_ID" aiEnabled -bool true
-          defaults write "$APP_BUNDLE_ID" showInMenuBar -bool false
-          defaults write "$APP_BUNDLE_ID" hotkey.togglePalette \
-            -string '{"combo":{"_0":{"carbonKeyCode":111,"carbonModifiers":0}}}'
-          SUPPORT="$HOME/Library/Application Support/$APP_BUNDLE_ID"
-          mkdir -p "$SUPPORT"
-          touch "$SUPPORT/onboarded"
           "$IME_CI_HELPER" select-pinyin | tee "$EVIDENCE_OUTPUT_DIR/input-source.log"
 
       - name: Reproduce with Midscene

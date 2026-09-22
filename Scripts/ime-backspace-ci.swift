@@ -20,11 +20,11 @@ private func selectPinyin() throws {
         else { return nil }
         return (source, identifier, name)
     }
-    guard
-        let candidate = candidates.first(where: {
-            $0.1.contains("SCIM.ITABC") || $0.2.localizedCaseInsensitiveContains("Pinyin")
-                || $0.2.contains("拼音")
+    let candidate = candidates.first(where: { $0.1.contains("SCIM.ITABC") })
+        ?? candidates.first(where: {
+            $0.2.localizedCaseInsensitiveContains("Pinyin") || $0.2.contains("拼音")
         })
+    guard let candidate
     else {
         let inventory = candidates.map { "\($0.1)\t\($0.2)" }.joined(separator: "\n")
         throw NSError(
