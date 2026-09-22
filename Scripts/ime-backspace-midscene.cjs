@@ -95,16 +95,15 @@ async function main() {
 
     if (useAIAct) {
       execFileSync('/usr/bin/open', [
+        '-n',
         '-F',
+        '/System/Applications/System Settings.app',
+      ]);
+      await sleep(5_000);
+      execFileSync('/usr/bin/open', [
         'x-apple.systempreferences:com.apple.Keyboard-Settings.extension',
       ]);
-      execFileSync('/usr/bin/osascript', [
-        '-e',
-        'tell application "System Settings" to reopen',
-        '-e',
-        'tell application "System Settings" to activate',
-      ]);
-      await sleep(7_000);
+      await sleep(5_000);
       await agent.aiAct(
         'Use mouse clicks only. In macOS System Settings, open Keyboard, scroll to the Text Input section, and click its Edit button. Do not type or use keyboard shortcuts.',
       );
