@@ -94,8 +94,13 @@ async function main() {
     });
 
     if (useAIAct) {
-      execFileSync('/usr/bin/open', ['-a', 'System Settings']);
-      await sleep(5_000);
+      await agent.callActionInActionSpace('KeyboardPress', { keyName: 'Meta+Space' });
+      await agent.callActionInActionSpace('Input', {
+        value: 'System Settings',
+        mode: 'typeOnly',
+      });
+      await agent.callActionInActionSpace('KeyboardPress', { keyName: 'Enter' });
+      await sleep(7_000);
       await agent.aiAct(
         'Use mouse clicks only. In macOS System Settings, open Keyboard, scroll to the Text Input section, and click its Edit button. Do not type or use keyboard shortcuts.',
       );
