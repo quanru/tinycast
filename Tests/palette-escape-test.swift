@@ -26,6 +26,15 @@ struct PaletteEscapeTests {
         }
     }
 
+    static func expectFieldOwnsBackspace(
+        _ expected: Bool, query: String = "", isEditingField: Bool = false,
+        isComposing: Bool = false, _ message: String
+    ) {
+        let actual = PaletteEscapeAction.fieldOwnsBackspace(
+            query: query, isEditingField: isEditingField, isComposing: isComposing)
+        expectChord(actual, expected, message)
+    }
+
     /// The shipped default, so a case only spells out what it is actually about.
     static func resolve(
         menuOpen: Bool = false, menuQuery: String = "", argumentFocused: Bool = false,
@@ -129,6 +138,15 @@ struct PaletteEscapeTests {
             resolve(menuOpen: true, argumentFocused: true, query: "search"),
             .closeMenu,
             "a menu still outranks the argument field beneath it")
+
+        expectFieldOwnsBackspace(
+            true, query: "draft", "a field with committed text owns Backspace")
+        expectFieldOwnsBackspace(
+            true, isEditingField: true, "an inline field owns Backspace")
+        expectFieldOwnsBackspace(
+            true, isComposing: true, "an active IME composition owns Backspace")
+        expectFieldOwnsBackspace(
+            false, "an empty idle search field lets the palette navigate")
 
         // ⌘⎋ never reaches the responder chain, so what counts as the chord is decided in the tap.
         expectChord(

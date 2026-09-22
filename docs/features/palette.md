@@ -348,6 +348,10 @@ well as `makeFirstResponder`: a key transition can commit or drop marked text wi
 anything, and a re-summon inside the Pop to Root window skips `prepare(mode:)` and never moves first
 responder, so neither of the other two paths would fire.
 
+The same state keeps bare Backspace with the field editor while marked text exists. The bound query
+is still empty during composition, so testing the query alone would mistake an in-flight Pinyin
+sequence for an empty field and navigate away from the screen.
+
 ## The panel settles the pointer itself
 
 `PalettePanel.applyCursorPolicy` sets the cursor after every mouse event: the I-beam inside the search

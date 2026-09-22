@@ -27,4 +27,10 @@ enum PaletteEscapeAction: Equatable {
     static func menu(query: String) -> Self {
         query.isEmpty ? .closeMenu : .clearMenuQuery
     }
+
+    static func fieldOwnsBackspace(
+        query: String, isEditingField: Bool, isComposing: Bool
+    ) -> Bool {
+        !query.isEmpty || isEditingField || isComposing
+    }
 }
