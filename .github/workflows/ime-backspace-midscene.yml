@@ -1,6 +1,8 @@
 name: IME Backspace Midscene Evidence
 
 on:
+  push:
+    branches: [fix/ime-backspace-navigation]
   workflow_dispatch:
 
 permissions:
