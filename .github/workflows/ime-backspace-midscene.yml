@@ -62,6 +62,12 @@ jobs:
         run: |
           SOURCE="$RUNNER_TEMP/tinycast-${EVIDENCE_LABEL}"
           git worktree add --detach "$SOURCE" "${{ matrix.target_ref }}"
+          if [[ "$EVIDENCE_LABEL" == before ]]; then
+            # Keep the comparison limited to the IME fix while allowing the old
+            # revision to compile with Xcode 26.6 on the Intel GUI runner.
+            git show "${{ github.sha }}:Tinycast/DesignSystem/Scrolling/OverflowFade.swift" \
+              > "$SOURCE/Tinycast/DesignSystem/Scrolling/OverflowFade.swift"
+          fi
           echo "SOURCE=$SOURCE" >> "$GITHUB_ENV"
 
       - uses: actions/setup-node@v6
