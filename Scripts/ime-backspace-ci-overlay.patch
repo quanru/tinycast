@@ -1,0 +1,23 @@
+diff --git a/Tinycast/Palette/PalettePanel.swift b/Tinycast/Palette/PalettePanel.swift
+index 754084c..3e5ccf9 100644
+--- a/Tinycast/Palette/PalettePanel.swift
++++ b/Tinycast/Palette/PalettePanel.swift
+@@ -176,6 +176,18 @@ final class PalettePanel: NSPanel {
+         {
+             return
+         }
++        #if DEBUG
++            // GitHub-hosted macOS runners expose PinyinKeyboard but cannot open
++            // System Settings to register SCIM.ITABC. Recreate the transient
++            // state observed while an IME owns marked text, immediately before
++            // the panel decides whether Backspace is navigation or text input.
++            if event.type == .keyDown, Int(event.keyCode) == kVK_Delete,
++                UserDefaults.standard.bool(forKey: "imeBackspaceCISimulateMarkedText")
++            {
++                paletteState?.isComposing = true
++                paletteState?.noteEditingField(false)
++            }
++        #endif
+         if event.type == .keyDown,
+             Int(event.keyCode) == kVK_Escape,
+             event.modifierFlags.isDisjoint(with: [.command, .option, .control, .shift]),

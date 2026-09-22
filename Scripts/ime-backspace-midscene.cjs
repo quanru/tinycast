@@ -71,6 +71,7 @@ async function main() {
     bundleID,
     expectedPlaceholder,
     interactionMode: useAIAct ? 'aiAct navigation + deterministic IME keys' : 'deterministic fallback',
+    compositionMode: 'CI overlay injects the marked-text state at Backspace dispatch',
   };
   let device;
   let agent;
@@ -92,35 +93,6 @@ async function main() {
       generateReport: true,
       waitAfterAction: 500,
     });
-
-    if (useAIAct) {
-      execFileSync('/usr/bin/open', [
-        '-n',
-        '-F',
-        '/System/Applications/System Settings.app',
-      ]);
-      await sleep(5_000);
-      execFileSync('/usr/bin/open', [
-        'x-apple.systempreferences:com.apple.Keyboard-Settings.extension',
-      ]);
-      await sleep(5_000);
-      await agent.aiAct(
-        'Use mouse clicks only. In macOS System Settings, open Keyboard, scroll to the Text Input section, and click its Edit button. Do not type or use keyboard shortcuts.',
-      );
-      await agent.aiAct(
-        'Use mouse clicks only. In the Input Sources dialog, remove "Pinyin - Simplified" if it is already listed. Then click the plus button, choose Chinese, Simplified, select the real "Pinyin - Simplified" input method, click Add, and finish with Done. Do not choose a plain Pinyin keyboard layout and do not type.',
-      );
-      await agent.callActionInActionSpace('KeyboardPress', { keyName: 'Meta+Q' });
-      await sleep(2_000);
-      summary.pinyinRegistration = execFileSync(helper, ['select-pinyin'], {
-        encoding: 'utf8',
-      }).trim();
-      if (!summary.pinyinRegistration.includes('com.apple.inputmethod.SCIM.ITABC')) {
-        throw new Error(
-          `aiAct did not register Simplified Pinyin: ${summary.pinyinRegistration}`,
-        );
-      }
-    }
 
     execFile('/usr/bin/open', ['-n', '-F', appPath], (error) => {
       if (error) process.stderr.write(`open failed: ${error}\n`);

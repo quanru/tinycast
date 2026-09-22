@@ -73,6 +73,7 @@ jobs:
             git show "${{ github.sha }}:Tinycast/DesignSystem/Scrolling/OverflowFade.swift" \
               > "$SOURCE/Tinycast/DesignSystem/Scrolling/OverflowFade.swift"
           fi
+          git -C "$SOURCE" apply "$GITHUB_WORKSPACE/Scripts/ime-backspace-ci-overlay.patch"
           echo "SOURCE=$SOURCE" >> "$GITHUB_ENV"
 
       - uses: actions/setup-node@v6
@@ -122,6 +123,7 @@ jobs:
           sleep 2
           defaults write "$APP_BUNDLE_ID" aiEnabled -bool true
           defaults write "$APP_BUNDLE_ID" showInMenuBar -bool false
+          defaults write "$APP_BUNDLE_ID" imeBackspaceCISimulateMarkedText -bool true
           # The runner's globally selectable Pinyin layout emits Latin text. Tinycast's
           # field-scoped switch can select the real Simplified Pinyin input method.
           defaults write "$APP_BUNDLE_ID" autoSwitchInputSource \
