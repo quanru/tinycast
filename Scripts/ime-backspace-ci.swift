@@ -23,6 +23,10 @@ private func selectPinyin() throws {
     let pinyinCandidates = candidates.filter {
         $0.1.contains("SCIM.ITABC") || $0.2.localizedCaseInsensitiveContains("Pinyin")
             || $0.2.contains("拼音")
+    }.sorted { lhs, rhs in
+        let lhsIsInputMethod = lhs.1.contains("SCIM.ITABC")
+        let rhsIsInputMethod = rhs.1.contains("SCIM.ITABC")
+        return lhsIsInputMethod && !rhsIsInputMethod
     }
     guard pinyinCandidates.isEmpty == false else {
         let inventory = candidates.map { "\($0.1)\t\($0.2)" }.joined(separator: "\n")
@@ -42,6 +46,18 @@ private func selectPinyin() throws {
     throw NSError(
         domain: "TinycastIMEBackspaceCI", code: 3,
         userInfo: [NSLocalizedDescriptionKey: "Could not select a Pinyin source:\n\(inventory)"])
+}
+
+private func currentInputSource() throws {
+    guard let source = TISCopyCurrentKeyboardInputSource()?.takeRetainedValue(),
+        let identifier: String = property(kTISPropertyInputSourceID, of: source),
+        let name: String = property(kTISPropertyLocalizedName, of: source)
+    else {
+        throw NSError(
+            domain: "TinycastIMEBackspaceCI", code: 4,
+            userInfo: [NSLocalizedDescriptionKey: "Could not read the current input source"])
+    }
+    print("\(identifier)\t\(name)")
 }
 
 private func attribute(_ name: String, of element: AXUIElement) -> Any? {
@@ -117,10 +133,15 @@ do {
                 userInfo: [NSLocalizedDescriptionKey: "focused-field requires a bundle id"])
         }
         try focusedField(bundleID: CommandLine.arguments[2])
+    case "current-input-source":
+        try currentInputSource()
     default:
         throw NSError(
             domain: "TinycastIMEBackspaceCI", code: 7,
-            userInfo: [NSLocalizedDescriptionKey: "Use select-pinyin or focused-field <bundle-id>"])
+            userInfo: [
+                NSLocalizedDescriptionKey:
+                    "Use select-pinyin, current-input-source, or focused-field <bundle-id>"
+            ])
     }
 } catch {
     FileHandle.standardError.write(Data("\(error.localizedDescription)\n".utf8))

@@ -2,10 +2,16 @@ const { execFile, execFileSync } = require('node:child_process');
 const { mkdir, writeFile } = require('node:fs/promises');
 const path = require('node:path');
 
-process.env.MIDSCENE_MODEL_NAME = 'unused-ci-model';
-process.env.MIDSCENE_MODEL_API_KEY = 'unused-ci-key';
-process.env.MIDSCENE_MODEL_BASE_URL = 'http://127.0.0.1:1/v1';
-process.env.MIDSCENE_MODEL_FAMILY = 'qwen3-vl';
+const useAIAct = Boolean(
+  process.env.MIDSCENE_MODEL_NAME && process.env.MIDSCENE_MODEL_API_KEY,
+);
+
+if (!useAIAct) {
+  process.env.MIDSCENE_MODEL_NAME = 'unused-ci-model';
+  process.env.MIDSCENE_MODEL_API_KEY = 'unused-ci-key';
+  process.env.MIDSCENE_MODEL_BASE_URL = 'http://127.0.0.1:1/v1';
+  process.env.MIDSCENE_MODEL_FAMILY = 'qwen3-vl';
+}
 process.env.MIDSCENE_MODEL_RETRY_COUNT = '0';
 process.env.MIDSCENE_REPORT_QUIET = 'true';
 
@@ -59,7 +65,13 @@ async function main() {
   const helper = required('IME_CI_HELPER');
   const outputDir = path.resolve(required('EVIDENCE_OUTPUT_DIR'));
   const reportFileName = `ime-backspace-${label}`;
-  const summary = { label, appPath, bundleID, expectedPlaceholder };
+  const summary = {
+    label,
+    appPath,
+    bundleID,
+    expectedPlaceholder,
+    interactionMode: useAIAct ? 'aiAct navigation + deterministic IME keys' : 'deterministic fallback',
+  };
   let device;
   let agent;
 
@@ -86,15 +98,20 @@ async function main() {
       waitAfterAction: 500,
     });
 
-    await agent.callActionInActionSpace('KeyboardPress', { keyName: 'F12' });
-    const launcher = await waitForFocusedField(
-      helper,
-      bundleID,
-      (field) => labelOf(field).includes('Search for apps and commands'),
-    );
-    summary.launcher = launcher;
-
-    await agent.callActionInActionSpace('KeyboardPress', { keyName: 'Tab' });
+    if (useAIAct) {
+      await agent.aiAct(
+        'Press F12 to open the Tinycast launcher. Then press Tab once to open AI Chat and focus the "Ask anything" input field.',
+      );
+      summary.launcher = { delegatedTo: 'aiAct' };
+    } else {
+      await agent.callActionInActionSpace('KeyboardPress', { keyName: 'F12' });
+      summary.launcher = await waitForFocusedField(
+        helper,
+        bundleID,
+        (field) => labelOf(field).includes('Search for apps and commands'),
+      );
+      await agent.callActionInActionSpace('KeyboardPress', { keyName: 'Tab' });
+    }
     const chat = await waitForFocusedField(
       helper,
       bundleID,
@@ -102,8 +119,10 @@ async function main() {
     );
     summary.chatBeforeComposition = chat;
 
-    await agent.callActionInActionSpace('KeyboardPress', { keyName: 'Control+Space' });
-    await sleep(1_000);
+    summary.inputSource = execFileSync(helper, ['current-input-source'], { encoding: 'utf8' }).trim();
+    if (!summary.inputSource.includes('com.apple.inputmethod.SCIM.ITABC')) {
+      throw new Error(`Expected Simplified Pinyin input method, got ${summary.inputSource}`);
+    }
     await agent.callActionInActionSpace('Input', { value: 'nihao', mode: 'typeOnly' });
     await sleep(500);
     summary.composing = focusedField(helper, bundleID);
@@ -120,11 +139,22 @@ async function main() {
     const screenshot = await device.screenshotBase64();
     await writeFile(path.join(outputDir, 'after-backspace.png'), screenshotBuffer(screenshot));
     summary.modelCalls = agent.metrics.calls;
-    if (summary.modelCalls !== 0) {
+    if (!useAIAct && summary.modelCalls !== 0) {
       throw new Error(`Expected deterministic Midscene actions, got ${summary.modelCalls} model calls`);
+    }
+    if (useAIAct && summary.modelCalls === 0) {
+      throw new Error('Expected aiAct to call the configured model');
     }
   } catch (error) {
     summary.error = error instanceof Error ? { message: error.message, stack: error.stack } : String(error);
+    if (device) {
+      try {
+        const screenshot = await device.screenshotBase64();
+        await writeFile(path.join(outputDir, 'failure.png'), screenshotBuffer(screenshot));
+      } catch (screenshotError) {
+        summary.screenshotError = String(screenshotError);
+      }
+    }
     throw error;
   } finally {
     if (agent) await agent.destroy().catch((error) => { summary.destroyError = String(error); });

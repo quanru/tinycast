@@ -27,6 +27,12 @@ jobs:
             expected_placeholder: Ask anything
             bundle_id: com.tinycast.ime-ci.after
     env:
+      # With these repository settings present, navigation uses aiAct. Without
+      # them, contributors can still exercise the exact IME regression locally.
+      MIDSCENE_MODEL_API_KEY: ${{ secrets.MIDSCENE_MODEL_API_KEY }}
+      MIDSCENE_MODEL_NAME: ${{ vars.MIDSCENE_MODEL_NAME }}
+      MIDSCENE_MODEL_BASE_URL: ${{ vars.MIDSCENE_MODEL_BASE_URL }}
+      MIDSCENE_MODEL_FAMILY: ${{ vars.MIDSCENE_MODEL_FAMILY }}
       MIDSCENE_RUN_DIR: ${{ github.workspace }}/midscene_run
       EVIDENCE_OUTPUT_DIR: ${{ github.workspace }}/midscene_run/evidence/${{ matrix.label }}
       EVIDENCE_LABEL: ${{ matrix.label }}
