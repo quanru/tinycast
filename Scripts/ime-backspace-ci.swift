@@ -52,6 +52,28 @@ private func attribute(_ name: String, of element: AXUIElement) -> Any? {
     return value
 }
 
+private func collectScreenText(
+    from element: AXUIElement, depth: Int = 0, result: inout [String]
+) {
+    guard depth <= 8, result.count < 300 else { return }
+    for key in [
+        kAXDescriptionAttribute, kAXTitleAttribute, kAXValueAttribute, kAXHelpAttribute,
+        kAXRoleDescriptionAttribute
+    ] {
+        if let value = attribute(key, of: element) as? String, value.isEmpty == false,
+            result.contains(value) == false
+        {
+            result.append(value)
+        }
+    }
+    guard let children = attribute(kAXChildrenAttribute, of: element) as? [AXUIElement] else {
+        return
+    }
+    for child in children {
+        collectScreenText(from: child, depth: depth + 1, result: &result)
+    }
+}
+
 private func focusedField(bundleID: String) throws {
     guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first
     else {
@@ -77,6 +99,9 @@ private func focusedField(bundleID: String) throws {
     for (name, key) in attributes {
         if let value = attribute(key, of: focused) as? String { result[name] = value }
     }
+    var screenText: [String] = []
+    collectScreenText(from: application, result: &screenText)
+    result["screenText"] = screenText
     let data = try JSONSerialization.data(withJSONObject: result, options: [.sortedKeys])
     print(String(decoding: data, as: UTF8.self))
 }

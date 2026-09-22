@@ -40,7 +40,9 @@ async function waitForFocusedField(helper, bundleID, predicate, timeout = 15_000
 }
 
 function labelOf(field) {
-  return [field.description, field.title, field.placeholder].filter(Boolean).join(' | ');
+  return [field.description, field.title, field.placeholder, ...(field.screenText || [])]
+    .filter(Boolean)
+    .join(' | ');
 }
 
 function screenshotBuffer(dataURL) {
