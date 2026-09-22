@@ -57,6 +57,7 @@ node_modules/
 *.swp
 *.tmp
 *.orig
+midscene_run/
 # Website (Next.js). `out/` is the static export, `.source/` is generated from
 # content/docs by fumadocs-mdx on install and build, `.wrangler/` is local deploy state.
 website/.next/

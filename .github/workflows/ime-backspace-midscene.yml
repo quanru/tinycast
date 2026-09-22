@@ -1,0 +1,121 @@
+name: IME Backspace Midscene Evidence
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  evidence:
+    name: ${{ matrix.label }} behavior
+    runs-on: macos-26
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: before
+            target_ref: 5a787533eceb9833e5cba4628433b21f67e97956
+            expected_placeholder: Search for apps and commands
+            bundle_id: com.tinycast.ime-ci.before
+          - label: after
+            target_ref: ${{ github.sha }}
+            expected_placeholder: Ask anything
+            bundle_id: com.tinycast.ime-ci.after
+    env:
+      MIDSCENE_RUN_DIR: ${{ github.workspace }}/midscene_run
+      EVIDENCE_OUTPUT_DIR: ${{ github.workspace }}/midscene_run/evidence/${{ matrix.label }}
+      EVIDENCE_LABEL: ${{ matrix.label }}
+      EXPECTED_PLACEHOLDER: ${{ matrix.expected_placeholder }}
+      APP_BUNDLE_ID: ${{ matrix.bundle_id }}
+
+    steps:
+      - name: Checkout evidence harness
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Select Xcode 26
+        shell: bash
+        run: |
+          XCODE_PATH="$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -n1)"
+          test -n "$XCODE_PATH"
+          echo "DEVELOPER_DIR=$XCODE_PATH/Contents/Developer" >> "$GITHUB_ENV"
+
+      - name: Inspect interactive desktop
+        shell: bash
+        run: |
+          mkdir -p "$EVIDENCE_OUTPUT_DIR"
+          {
+            sw_vers
+            system_profiler SPDisplaysDataType
+            osascript -e 'tell application "System Events" to return UI elements enabled'
+          } | tee "$EVIDENCE_OUTPUT_DIR/runner-environment.log"
+
+      - name: Prepare source under test
+        shell: bash
+        run: |
+          SOURCE="$RUNNER_TEMP/tinycast-${EVIDENCE_LABEL}"
+          git worktree add --detach "$SOURCE" "${{ matrix.target_ref }}"
+          echo "SOURCE=$SOURCE" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Install Midscene
+        shell: bash
+        run: |
+          MIDSCENE_HOME="$RUNNER_TEMP/midscene"
+          mkdir -p "$MIDSCENE_HOME"
+          npm install --prefix "$MIDSCENE_HOME" --no-package-lock @midscene/computer@1.13.0
+          echo "NODE_PATH=$MIDSCENE_HOME/node_modules" >> "$GITHUB_ENV"
+
+      - name: Build test helpers
+        shell: bash
+        run: |
+          xcrun swiftc Scripts/ime-backspace-ci.swift \
+            -framework AppKit -framework ApplicationServices -framework Carbon \
+            -o "$RUNNER_TEMP/ime-backspace-ci"
+          echo "IME_CI_HELPER=$RUNNER_TEMP/ime-backspace-ci" >> "$GITHUB_ENV"
+
+      - name: Build Tinycast
+        shell: bash
+        run: |
+          PRODUCT_NAME="Tinycast IME ${EVIDENCE_LABEL}"
+          DERIVED_DATA="$RUNNER_TEMP/DerivedData-${EVIDENCE_LABEL}"
+          xcodebuild -project "$SOURCE/Tinycast.xcodeproj" -scheme Tinycast -configuration Debug \
+            -derivedDataPath "$DERIVED_DATA" \
+            CODE_SIGNING_ALLOWED=NO PRODUCT_NAME="$PRODUCT_NAME" \
+            PRODUCT_BUNDLE_IDENTIFIER="$APP_BUNDLE_ID" build
+          APP_PATH="$DERIVED_DATA/Build/Products/Debug/${PRODUCT_NAME}.app"
+          test -d "$APP_PATH"
+          echo "APP_PATH=$APP_PATH" >> "$GITHUB_ENV"
+
+      - name: Prepare Tinycast and Chinese Pinyin
+        shell: bash
+        run: |
+          defaults write "$APP_BUNDLE_ID" aiEnabled -bool true
+          defaults write "$APP_BUNDLE_ID" showInMenuBar -bool false
+          defaults write "$APP_BUNDLE_ID" hotkey.togglePalette \
+            -string '{"combo":{"_0":{"carbonKeyCode":111,"carbonModifiers":0}}}'
+          SUPPORT="$HOME/Library/Application Support/$APP_BUNDLE_ID"
+          mkdir -p "$SUPPORT"
+          touch "$SUPPORT/onboarded"
+          "$IME_CI_HELPER" select-pinyin | tee "$EVIDENCE_OUTPUT_DIR/input-source.log"
+
+      - name: Reproduce with Midscene
+        shell: bash
+        run: node Scripts/ime-backspace-midscene.cjs
+
+      - name: Upload Midscene report and evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ime-backspace-${{ matrix.label }}
+          path: |
+            midscene_run/report/ime-backspace-${{ matrix.label }}.html
+            midscene_run/evidence/${{ matrix.label }}
+          if-no-files-found: error
+          retention-days: 30
