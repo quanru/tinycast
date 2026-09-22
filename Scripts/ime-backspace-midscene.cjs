@@ -82,11 +82,6 @@ async function main() {
       throw new Error(`Midscene desktop is unavailable: ${JSON.stringify(summary.environment)}`);
     }
 
-    execFile('/usr/bin/open', ['-n', '-F', appPath], (error) => {
-      if (error) process.stderr.write(`open failed: ${error}\n`);
-    });
-    await sleep(4_000);
-
     device = new ComputerDevice({ inputStrategy: 'sequential', keyboardTypeDelay: 120 });
     await device.connect();
     agent = new ComputerAgent(device, {
@@ -97,6 +92,33 @@ async function main() {
       generateReport: true,
       waitAfterAction: 500,
     });
+
+    if (useAIAct) {
+      execFile(
+        '/usr/bin/open',
+        ['x-apple.systempreferences:com.apple.Keyboard-Settings.extension'],
+        (error) => {
+          if (error) process.stderr.write(`opening Keyboard settings failed: ${error}\n`);
+        },
+      );
+      await sleep(4_000);
+      await agent.aiAct(
+        'In macOS System Settings, open Keyboard > Text Input > Edit. Ensure the real "Pinyin - Simplified" input method is installed: if it is already listed, remove it first; then click +, choose Chinese, Simplified, select "Pinyin - Simplified", click Add, and finish with Done. Do not choose a plain Pinyin keyboard layout. Finally close System Settings.',
+      );
+      summary.pinyinRegistration = execFileSync(helper, ['select-pinyin'], {
+        encoding: 'utf8',
+      }).trim();
+      if (!summary.pinyinRegistration.includes('com.apple.inputmethod.SCIM.ITABC')) {
+        throw new Error(
+          `aiAct did not register Simplified Pinyin: ${summary.pinyinRegistration}`,
+        );
+      }
+    }
+
+    execFile('/usr/bin/open', ['-n', '-F', appPath], (error) => {
+      if (error) process.stderr.write(`open failed: ${error}\n`);
+    });
+    await sleep(4_000);
 
     if (useAIAct) {
       await agent.aiAct(
