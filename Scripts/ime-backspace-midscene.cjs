@@ -87,7 +87,7 @@ async function main() {
     });
     await sleep(4_000);
 
-    device = new ComputerDevice({ keyboardTypeDelay: 120 });
+    device = new ComputerDevice({ inputStrategy: 'sequential', keyboardTypeDelay: 120 });
     await device.connect();
     agent = new ComputerAgent(device, {
       groupName: `Tinycast IME Backspace ${label}`,
