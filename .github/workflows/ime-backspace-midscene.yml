@@ -107,6 +107,10 @@ jobs:
         run: |
           defaults write "$APP_BUNDLE_ID" aiEnabled -bool true
           defaults write "$APP_BUNDLE_ID" showInMenuBar -bool false
+          # The runner's globally selectable Pinyin layout emits Latin text. Tinycast's
+          # field-scoped switch can select the real Simplified Pinyin input method.
+          defaults write "$APP_BUNDLE_ID" autoSwitchInputSource \
+            -string 'com.apple.inputmethod.SCIM.ITABC'
           defaults write "$APP_BUNDLE_ID" hotkey.togglePalette \
             -string '{"combo":{"_0":{"carbonKeyCode":111,"carbonModifiers":0}}}'
           SUPPORT="$HOME/Library/Application Support/$APP_BUNDLE_ID"
