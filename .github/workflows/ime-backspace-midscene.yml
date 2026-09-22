@@ -105,6 +105,15 @@ jobs:
       - name: Prepare Tinycast and Chinese Pinyin
         shell: bash
         run: |
+          # Fresh GitHub users list the Pinyin input mode but do not enable it. Seed
+          # the same HIToolbox records System Settings writes when adding 简体拼音.
+          defaults write com.apple.HIToolbox AppleEnabledInputSources -array \
+            '{"InputSourceKind"="Keyboard Layout";"KeyboardLayout ID"=252;"KeyboardLayout Name"="ABC";}' \
+            '{"Bundle ID"="com.apple.inputmethod.SCIM";"Input Mode"="com.apple.inputmethod.SCIM.ITABC";"InputSourceKind"="Input Mode";}'
+          defaults write com.apple.HIToolbox AppleSelectedInputSources -array \
+            '{"Bundle ID"="com.apple.inputmethod.SCIM";"Input Mode"="com.apple.inputmethod.SCIM.ITABC";"InputSourceKind"="Input Mode";}'
+          killall cfprefsd 2>/dev/null || true
+          sleep 2
           defaults write "$APP_BUNDLE_ID" aiEnabled -bool true
           defaults write "$APP_BUNDLE_ID" showInMenuBar -bool false
           # The runner's globally selectable Pinyin layout emits Latin text. Tinycast's
