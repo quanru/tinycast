@@ -20,30 +20,28 @@ private func selectPinyin() throws {
         else { return nil }
         return (source, identifier, name)
     }
-    let candidate = candidates.first(where: { $0.1.contains("SCIM.ITABC") })
-        ?? candidates.first(where: {
-            $0.2.localizedCaseInsensitiveContains("Pinyin") || $0.2.contains("拼音")
-        })
-    guard let candidate
-    else {
+    let pinyinCandidates = candidates.filter {
+        $0.1.contains("SCIM.ITABC") || $0.2.localizedCaseInsensitiveContains("Pinyin")
+            || $0.2.contains("拼音")
+    }
+    guard pinyinCandidates.isEmpty == false else {
         let inventory = candidates.map { "\($0.1)\t\($0.2)" }.joined(separator: "\n")
         throw NSError(
             domain: "TinycastIMEBackspaceCI", code: 2,
             userInfo: [NSLocalizedDescriptionKey: "No Pinyin input source found:\n\(inventory)"])
     }
-    let enableStatus = TISEnableInputSource(candidate.0)
-    guard enableStatus == noErr else {
-        throw NSError(
-            domain: "TinycastIMEBackspaceCI", code: Int(enableStatus),
-            userInfo: [NSLocalizedDescriptionKey: "Could not enable \(candidate.1)"])
+    for candidate in pinyinCandidates {
+        let enableStatus = TISEnableInputSource(candidate.0)
+        guard enableStatus == noErr else { continue }
+        let selectStatus = TISSelectInputSource(candidate.0)
+        guard selectStatus == noErr else { continue }
+        print("\(candidate.1)\t\(candidate.2)")
+        return
     }
-    let selectStatus = TISSelectInputSource(candidate.0)
-    guard selectStatus == noErr else {
-        throw NSError(
-            domain: "TinycastIMEBackspaceCI", code: Int(selectStatus),
-            userInfo: [NSLocalizedDescriptionKey: "Could not select \(candidate.1)"])
-    }
-    print("\(candidate.1)\t\(candidate.2)")
+    let inventory = pinyinCandidates.map { "\($0.1)\t\($0.2)" }.joined(separator: "\n")
+    throw NSError(
+        domain: "TinycastIMEBackspaceCI", code: 3,
+        userInfo: [NSLocalizedDescriptionKey: "Could not select a Pinyin source:\n\(inventory)"])
 }
 
 private func attribute(_ name: String, of element: AXUIElement) -> Any? {
@@ -58,13 +56,13 @@ private func focusedField(bundleID: String) throws {
     guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first
     else {
         throw NSError(
-            domain: "TinycastIMEBackspaceCI", code: 3,
+            domain: "TinycastIMEBackspaceCI", code: 4,
             userInfo: [NSLocalizedDescriptionKey: "No running application for \(bundleID)"])
     }
     let application = AXUIElementCreateApplication(app.processIdentifier)
     guard let value = attribute(kAXFocusedUIElementAttribute, of: application) else {
         throw NSError(
-            domain: "TinycastIMEBackspaceCI", code: 4,
+            domain: "TinycastIMEBackspaceCI", code: 5,
             userInfo: [NSLocalizedDescriptionKey: "No focused element for \(bundleID)"])
     }
     let focused = value as! AXUIElement
@@ -90,13 +88,13 @@ do {
     case "focused-field":
         guard CommandLine.arguments.count == 3 else {
             throw NSError(
-                domain: "TinycastIMEBackspaceCI", code: 5,
+                domain: "TinycastIMEBackspaceCI", code: 6,
                 userInfo: [NSLocalizedDescriptionKey: "focused-field requires a bundle id"])
         }
         try focusedField(bundleID: CommandLine.arguments[2])
     default:
         throw NSError(
-            domain: "TinycastIMEBackspaceCI", code: 6,
+            domain: "TinycastIMEBackspaceCI", code: 7,
             userInfo: [NSLocalizedDescriptionKey: "Use select-pinyin or focused-field <bundle-id>"])
     }
 } catch {
