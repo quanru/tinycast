@@ -22,7 +22,8 @@ final class QuickActionPanel: NSPanel {
         // Above the palette, below a dialog: a failure report must still land on top of it.
         level = .floating
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        isMovableByWindowBackground = true
+        // The title handle owns movement; background dragging swallows SwiftUI button presses.
+        isMovableByWindowBackground = false
         titleVisibility = .hidden
         titlebarAppearsTransparent = true
         isOpaque = false
