@@ -98,7 +98,10 @@ async function main() {
   const processName = required('APP_PROCESS_NAME');
   const helper = required('BUTTONS_CI_HELPER');
   const label = required('EVIDENCE_LABEL');
-  const expectedWorking = required('EXPECTED_WORKING') === 'true';
+  const expectedWorkingValue = required('EXPECTED_WORKING');
+  const expectedWorking = expectedWorkingValue === 'observe'
+    ? null
+    : expectedWorkingValue === 'true';
   const outputDir = path.resolve(required('EVIDENCE_OUTPUT_DIR'));
   const replaceMarkerKey = 'quickActionButtonsCIReplacedText';
   const dismissMarkerKey = 'quickActionButtonsCIDismissed';
@@ -188,7 +191,9 @@ async function main() {
       Object.entries(summary.observations).map(([name, observation]) => [name, observation.worked]),
     );
     summary.modelCalls = agent.metrics.calls;
-    const unexpected = Object.entries(actual).filter(([, worked]) => worked !== expectedWorking);
+    const unexpected = expectedWorking === null
+      ? []
+      : Object.entries(actual).filter(([, worked]) => worked !== expectedWorking);
     if (unexpected.length) {
       throw new Error(
         `Unexpected button outcomes: ${JSON.stringify(actual)}, expected each to be ${expectedWorking}`,
