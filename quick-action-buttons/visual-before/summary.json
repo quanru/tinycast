@@ -1,0 +1,35 @@
+{
+  "label": "before",
+  "expectedWorking": false,
+  "interactionMode": "aiAct hover with deterministic hover and held-mouse fallback",
+  "scenario": "Translation result buttons should visually distinguish hover from mouse-down",
+  "observations": {
+    "copy": {
+      "worked": true,
+      "hoverHash": "b0d69c74216bf7f2a0d2c18edfd1fe1a170acaa432c4388e545442fbdb6a08a4",
+      "pressedHash": "b0d69c74216bf7f2a0d2c18edfd1fe1a170acaa432c4388e545442fbdb6a08a4",
+      "hoverAndPressedAreIdentical": true,
+      "panelWindowCount": 1
+    },
+    "replace": {
+      "worked": true,
+      "hoverHash": "6a26ca643bffbaa451cca6afc1c96444a844caeee631f3a9443a006ac590b594",
+      "pressedHash": "6a26ca643bffbaa451cca6afc1c96444a844caeee631f3a9443a006ac590b594",
+      "hoverAndPressedAreIdentical": true,
+      "panelWindowCount": 0
+    },
+    "dismiss": {
+      "worked": true,
+      "hoverHash": "7b22d0319a0f198f576c33e967a62f1a25f5a56dc2546c9ef528990523e138f2",
+      "pressedHash": "7b22d0319a0f198f576c33e967a62f1a25f5a56dc2546c9ef528990523e138f2",
+      "hoverAndPressedAreIdentical": true,
+      "panelWindowCount": 0
+    }
+  },
+  "environment": {
+    "available": true,
+    "platform": "darwin",
+    "displays": 1
+  },
+  "modelCalls": 6
+}

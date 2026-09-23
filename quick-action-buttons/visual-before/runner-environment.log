@@ -1,0 +1,25 @@
+ProductName:		macOS
+ProductVersion:		26.6.1
+BuildVersion:		25G76
+Graphics/Displays:
+
+    Apple Paravirtualized Graphics Device:
+
+      Chipset Model: Apple Paravirtualized Graphics Device
+      Type: GPU
+      VRAM (Total): 64 MB
+      Vendor: Apple (0x106b)
+      Device ID: 0xeeee
+      Revision ID: 0x0000
+      Metal Support: Metal 2
+      Displays:
+        Display:
+          Resolution: 1920 x 1080 (1080p FHD - Full High Definition)
+          UI Looks like: 1920 x 1080 @ 30.00Hz
+          Framebuffer Depth: 24-Bit Color (ARGB8888)
+          Main Display: Yes
+          Mirror: Off
+          Online: Yes
+          Connection Type: Internal
+
+true
