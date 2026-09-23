@@ -49,9 +49,15 @@ let windows = CGWindowListCopyWindowInfo(
     kCGNullWindowID
 ) as? [[String: Any]] ?? []
 
-let visibleWindows = windows.compactMap { window -> CGRect? in
+struct WindowInfo {
+    let id: Int
+    let bounds: CGRect
+}
+
+let visibleWindows = windows.compactMap { window -> WindowInfo? in
     guard
         (window[kCGWindowOwnerPID as String] as? Int32) == application.processIdentifier,
+        let id = window[kCGWindowNumber as String] as? Int,
         let bounds = window[kCGWindowBounds as String] as? [String: CGFloat],
         let width = bounds["Width"],
         let height = bounds["Height"]
@@ -60,17 +66,20 @@ let visibleWindows = windows.compactMap { window -> CGRect? in
     guard alpha > 0 && width > 100 && height > 100 else { return nil }
     let x = bounds["X"] ?? 0
     let y = bounds["Y"] ?? 0
-    return CGRect(x: x, y: y, width: width, height: height)
+    return WindowInfo(id: id, bounds: CGRect(x: x, y: y, width: width, height: height))
 }
 
 if command == "visible-window-count" {
     print(visibleWindows.count)
-} else if let bounds = visibleWindows.max(by: { $0.width * $0.height < $1.width * $1.height }) {
-    let value: [String: CGFloat] = [
-        "x": bounds.minX,
-        "y": bounds.minY,
-        "width": bounds.width,
-        "height": bounds.height,
+} else if let window = visibleWindows.max(by: {
+    $0.bounds.width * $0.bounds.height < $1.bounds.width * $1.bounds.height
+}) {
+    let value: [String: Any] = [
+        "id": window.id,
+        "x": window.bounds.minX,
+        "y": window.bounds.minY,
+        "width": window.bounds.width,
+        "height": window.bounds.height,
     ]
     let data = try JSONSerialization.data(withJSONObject: value, options: [.sortedKeys])
     print(String(decoding: data, as: UTF8.self))

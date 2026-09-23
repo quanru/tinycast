@@ -1,6 +1,6 @@
 const { execFile, execFileSync } = require('node:child_process');
 const { createHash } = require('node:crypto');
-const { mkdir, writeFile } = require('node:fs/promises');
+const { mkdir, readFile, writeFile } = require('node:fs/promises');
 const path = require('node:path');
 
 for (const name of ['MIDSCENE_MODEL_NAME', 'MIDSCENE_MODEL_API_KEY']) {
@@ -106,6 +106,14 @@ async function saveScreenshot(device, outputDir, name) {
   return createHash('sha256').update(buffer).digest('hex');
 }
 
+async function saveWindowScreenshot(helper, bundleID, outputDir, name) {
+  const bounds = windowBounds(helper, bundleID);
+  const outputPath = path.join(outputDir, `${name}.png`);
+  execFileSync('/usr/sbin/screencapture', ['-x', '-l', String(bounds.id), outputPath]);
+  const buffer = await readFile(outputPath);
+  return createHash('sha256').update(buffer).digest('hex');
+}
+
 async function main() {
   const appPath = required('APP_PATH');
   const bundleID = required('APP_BUNDLE_ID');
@@ -182,12 +190,15 @@ async function main() {
         },
       });
       await sleep(500);
-      const hoverHash = await saveScreenshot(device, outputDir, `${testCase.name}-hover`);
+      await saveScreenshot(device, outputDir, `${testCase.name}-hover-desktop`);
+      const hoverHash = await saveWindowScreenshot(
+        helper, bundleID, outputDir, `${testCase.name}-hover`);
       let pressedHash;
       try {
         execFileSync(helper, ['mouse-down', bundleID, String(point[0]), String(point[1])]);
         await sleep(250);
-        pressedHash = await saveScreenshot(device, outputDir, `${testCase.name}-pressed`);
+        pressedHash = await saveWindowScreenshot(
+          helper, bundleID, outputDir, `${testCase.name}-pressed`);
       } finally {
         execFileSync(helper, ['mouse-up', bundleID, String(point[0]), String(point[1])]);
       }
