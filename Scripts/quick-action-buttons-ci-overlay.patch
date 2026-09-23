@@ -20,12 +20,15 @@ diff --git a/Tinycast/App/AppCore.swift b/Tinycast/App/AppCore.swift
 diff --git a/Tinycast/Features/QuickActions/UI/QuickActionCoordinator.swift b/Tinycast/Features/QuickActions/UI/QuickActionCoordinator.swift
 --- a/Tinycast/Features/QuickActions/UI/QuickActionCoordinator.swift
 +++ b/Tinycast/Features/QuickActions/UI/QuickActionCoordinator.swift
-@@ -309,6 +309,24 @@ final class QuickActionCoordinator {
+@@ -309,6 +309,27 @@ final class QuickActionCoordinator {
              })
      }
  
 +#if DEBUG
 +    func presentButtonsCITest() {
++        panels.onCITestDismiss = {
++            UserDefaults.standard.set(true, forKey: "quickActionButtonsCIDismissed")
++        }
 +        let state = QuickActionPanelState(
 +            action: .translate,
 +            original: "Hello from Tinycast",
@@ -45,3 +48,30 @@ diff --git a/Tinycast/Features/QuickActions/UI/QuickActionCoordinator.swift b/Ti
      private func rerun(_ state: QuickActionPanelState, target: NSRunningApplication?) {
          state.restart()
          start { [weak self] in await self?.perform(state, target: target, previewing: true) }
+diff --git a/Tinycast/Features/QuickActions/UI/QuickActionPanelController.swift b/Tinycast/Features/QuickActions/UI/QuickActionPanelController.swift
+--- a/Tinycast/Features/QuickActions/UI/QuickActionPanelController.swift
++++ b/Tinycast/Features/QuickActions/UI/QuickActionPanelController.swift
+@@ -9,4 +9,7 @@ final class QuickActionPanelController: NSObject, NSWindowDelegate {
+     private var onReplace: ((String) -> Void)?
+     private var onRetranslate: ((Locale.Language) -> Void)?
+-
++#if DEBUG
++    var onCITestDismiss: (() -> Void)?
++#endif
++
+     /// Clear of the pointer, so the panel never opens under the hand that summoned it.
+@@ -32,8 +35,13 @@ final class QuickActionPanelController: NSObject, NSWindowDelegate {
+                 state: state,
+                 languages: languages,
+                 onReplace: { [weak self] in self?.replace(state.output) },
+                 onCopy: { [weak self] in self?.copyOutput() },
+-                onCancel: { [weak self] in self?.dismiss() },
++                onCancel: { [weak self] in
++#if DEBUG
++                    self?.onCITestDismiss?()
++#endif
++                    self?.dismiss()
++                },
+                 onRetranslate: { [weak self] in self?.onRetranslate?($0) },
+                 onOpenLanguageSettings: { [weak self] in self?.openLanguageSettings() },
+                 onHeight: { [weak self] in self?.resize(toHeight: $0) }

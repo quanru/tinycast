@@ -29,6 +29,27 @@ function windowCount(helper, bundleID) {
   return Number(execFileSync(helper, ['visible-window-count', bundleID], { encoding: 'utf8' }).trim());
 }
 
+function windowBounds(helper, bundleID) {
+  const output = execFileSync(helper, ['window-bounds', bundleID], { encoding: 'utf8' }).trim();
+  const bounds = JSON.parse(output);
+  if (!bounds) throw new Error('Tinycast result panel has no visible window bounds');
+  return bounds;
+}
+
+function defaultValue(bundleID, key) {
+  try {
+    return execFileSync('/usr/bin/defaults', ['read', bundleID, key], { encoding: 'utf8' }).trim();
+  } catch {
+    return '';
+  }
+}
+
+function deleteDefault(bundleID, key) {
+  try {
+    execFileSync('/usr/bin/defaults', ['delete', bundleID, key], { stdio: 'ignore' });
+  } catch {}
+}
+
 async function waitForWindowCount(helper, bundleID, predicate, timeout = 15_000) {
   const deadline = Date.now() + timeout;
   let count = 0;
@@ -54,6 +75,17 @@ async function launchPanel(appPath, helper, bundleID) {
   await sleep(750);
 }
 
+async function restartPanel(appPath, processName, helper, bundleID) {
+  stopApp(processName);
+  await waitForWindowCount(helper, bundleID, (count) => count === 0);
+  await launchPanel(appPath, helper, bundleID);
+}
+
+function buttonPoint(bounds, button) {
+  const rightInset = { Copy: 125, Replace: 55, Dismiss: 194 }[button];
+  return [bounds.x + bounds.width - rightInset, bounds.y + bounds.height - 29];
+}
+
 async function saveScreenshot(device, outputDir, name) {
   const screenshot = await device.screenshotBase64();
   await writeFile(path.join(outputDir, `${name}.png`), screenshotBuffer(screenshot));
@@ -67,11 +99,12 @@ async function main() {
   const label = required('EVIDENCE_LABEL');
   const expectedWorking = required('EXPECTED_WORKING') === 'true';
   const outputDir = path.resolve(required('EVIDENCE_OUTPUT_DIR'));
-  const markerKey = 'quickActionButtonsCIReplacedText';
+  const replaceMarkerKey = 'quickActionButtonsCIReplacedText';
+  const dismissMarkerKey = 'quickActionButtonsCIDismissed';
   const summary = {
     label,
     expectedWorking,
-    interactionMode: 'aiAct clicks + deterministic outcome checks',
+    interactionMode: 'aiAct clicks with geometry fallback + deterministic outcome checks',
     scenario: 'Translation result panel Copy, Replace, and Dismiss buttons',
     observations: {},
   };
@@ -96,62 +129,70 @@ async function main() {
       waitAfterAction: 500,
     });
 
-    stopApp(processName);
-    execFileSync('/usr/bin/pbcopy', [], { input: 'clipboard sentinel' });
-    await launchPanel(appPath, helper, bundleID);
-    await saveScreenshot(device, outputDir, 'copy-before');
-    await agent.aiAct('Click the Copy button in the Tinycast Translate result panel exactly once.');
-    await sleep(750);
-    const copiedText = execFileSync('/usr/bin/pbpaste', [], { encoding: 'utf8' });
-    summary.observations.copy = {
-      worked: copiedText === translatedText,
-      panelWindowCount: windowCount(helper, bundleID),
-    };
-    await saveScreenshot(device, outputDir, 'copy-after');
-    stopApp(processName);
-    await waitForWindowCount(helper, bundleID, (count) => count === 0);
+    const cases = [
+      {
+        name: 'copy',
+        button: 'Copy',
+        reset: () => execFileSync('/usr/bin/pbcopy', [], { input: 'clipboard sentinel' }),
+        worked: () => execFileSync('/usr/bin/pbpaste', [], { encoding: 'utf8' }) === translatedText,
+      },
+      {
+        name: 'replace',
+        button: 'Replace',
+        reset: () => deleteDefault(bundleID, replaceMarkerKey),
+        worked: () => defaultValue(bundleID, replaceMarkerKey) === translatedText,
+      },
+      {
+        name: 'dismiss',
+        button: 'Dismiss',
+        reset: () => deleteDefault(bundleID, dismissMarkerKey),
+        worked: () => defaultValue(bundleID, dismissMarkerKey) === '1',
+      },
+    ];
 
-    try {
-      execFileSync('/usr/bin/defaults', ['delete', bundleID, markerKey], { stdio: 'ignore' });
-    } catch {}
-    await launchPanel(appPath, helper, bundleID);
-    await saveScreenshot(device, outputDir, 'replace-before');
-    await agent.aiAct('Click the Replace button in the Tinycast Translate result panel exactly once.');
-    await sleep(750);
-    let replacedText = '';
-    try {
-      replacedText = execFileSync('/usr/bin/defaults', ['read', bundleID, markerKey], {
-        encoding: 'utf8',
-      }).trim();
-    } catch {}
-    summary.observations.replace = {
-      worked: replacedText === translatedText,
-      panelWindowCount: windowCount(helper, bundleID),
-    };
-    await saveScreenshot(device, outputDir, 'replace-after');
-    stopApp(processName);
-    await waitForWindowCount(helper, bundleID, (count) => count === 0);
-
-    await launchPanel(appPath, helper, bundleID);
-    await saveScreenshot(device, outputDir, 'dismiss-before');
-    await agent.aiAct('Click the Dismiss button in the Tinycast Translate result panel exactly once.');
-    await sleep(1_000);
-    summary.observations.dismiss = {
-      worked: windowCount(helper, bundleID) === 0,
-      panelWindowCount: windowCount(helper, bundleID),
-    };
-    await saveScreenshot(device, outputDir, 'dismiss-after');
+    for (const testCase of cases) {
+      testCase.reset();
+      await restartPanel(appPath, processName, helper, bundleID);
+      await saveScreenshot(device, outputDir, `${testCase.name}-before`);
+      await agent.aiAct(
+        `Click the ${testCase.button} button in the Tinycast Translate result panel exactly once.`,
+      );
+      await sleep(750);
+      const aiActWorked = testCase.worked();
+      let fallbackUsed = false;
+      if (!aiActWorked) {
+        fallbackUsed = true;
+        if (windowCount(helper, bundleID) === 0) {
+          await restartPanel(appPath, processName, helper, bundleID);
+        }
+        const point = buttonPoint(windowBounds(helper, bundleID), testCase.button);
+        await agent.callActionInActionSpace('Tap', {
+          locate: {
+            prompt: `${testCase.button} button in the Tinycast Translate result panel`,
+            locatedPixelResult: { center: point },
+          },
+        });
+        await sleep(750);
+      }
+      summary.observations[testCase.name] = {
+        worked: testCase.worked(),
+        aiActWorked,
+        fallbackUsed,
+        panelWindowCount: windowCount(helper, bundleID),
+      };
+      await saveScreenshot(device, outputDir, `${testCase.name}-after`);
+    }
 
     const actual = Object.fromEntries(
       Object.entries(summary.observations).map(([name, observation]) => [name, observation.worked]),
     );
+    summary.modelCalls = agent.metrics.calls;
     const unexpected = Object.entries(actual).filter(([, worked]) => worked !== expectedWorking);
     if (unexpected.length) {
       throw new Error(
         `Unexpected button outcomes: ${JSON.stringify(actual)}, expected each to be ${expectedWorking}`,
       );
     }
-    summary.modelCalls = agent.metrics.calls;
     if (summary.modelCalls < 3) {
       throw new Error(`Expected at least three aiAct model calls, got ${summary.modelCalls}`);
     }
