@@ -1,0 +1,47 @@
+diff --git a/Tinycast/App/AppCore.swift b/Tinycast/App/AppCore.swift
+--- a/Tinycast/App/AppCore.swift
++++ b/Tinycast/App/AppCore.swift
+@@ -385,7 +385,15 @@ final class AppCore {
+             if !OnboardingState.hasOnboarded {
+                 OnboardingState.markShown()
+                 onboardingCoordinator.showOnboarding()
+             }
++#if DEBUG
++            if UserDefaults.standard.bool(forKey: "quickActionButtonsCITest") {
++                Task { @MainActor [weak self] in
++                    try? await Task.sleep(for: .seconds(1))
++                    self?.quickActionCoordinator.presentButtonsCITest()
++                }
++            }
++#endif
+         }
+     }
+ 
+diff --git a/Tinycast/Features/QuickActions/UI/QuickActionCoordinator.swift b/Tinycast/Features/QuickActions/UI/QuickActionCoordinator.swift
+--- a/Tinycast/Features/QuickActions/UI/QuickActionCoordinator.swift
++++ b/Tinycast/Features/QuickActions/UI/QuickActionCoordinator.swift
+@@ -309,6 +309,24 @@ final class QuickActionCoordinator {
+             })
+     }
+ 
++#if DEBUG
++    func presentButtonsCITest() {
++        let state = QuickActionPanelState(
++            action: .translate,
++            original: "Hello from Tinycast",
++            targetLanguage: Locale.Language(identifier: "fr"))
++        state.finish("Bonjour from Tinycast")
++        panels.present(
++            state,
++            metrics: settings.interfaceSize.metrics,
++            languages: [],
++            onRetranslate: { _ in },
++            onReplace: { text in
++                UserDefaults.standard.set(text, forKey: "quickActionButtonsCIReplacedText")
++            })
++    }
++#endif
++
+     private func rerun(_ state: QuickActionPanelState, target: NSRunningApplication?) {
+         state.restart()
+         start { [weak self] in await self?.perform(state, target: target, previewing: true) }

@@ -1,0 +1,127 @@
+name: Quick Action Buttons Midscene Evidence
+
+on:
+  push:
+    branches: [evidence/quick-action-panel-buttons]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  evidence:
+    name: ${{ matrix.label }} behavior
+    runs-on: macos-26-intel
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: before
+            target_ref: d93a09baac74da20a10dedf00b92834ce4c49b04
+            expected_working: "false"
+            bundle_id: com.tinycast.buttons-ci.before
+          - label: after
+            target_ref: ada2c06556cfa6708dd1bbf3f0ca0b770f2dd524
+            expected_working: "true"
+            bundle_id: com.tinycast.buttons-ci.after
+    env:
+      MIDSCENE_MODEL_API_KEY: ${{ secrets.MIDSCENE_MODEL_API_KEY }}
+      MIDSCENE_MODEL_NAME: ${{ vars.MIDSCENE_MODEL_NAME }}
+      MIDSCENE_MODEL_BASE_URL: ${{ vars.MIDSCENE_MODEL_BASE_URL }}
+      MIDSCENE_MODEL_FAMILY: ${{ vars.MIDSCENE_MODEL_FAMILY }}
+      MIDSCENE_RUN_DIR: ${{ github.workspace }}/midscene_run
+      EVIDENCE_OUTPUT_DIR: ${{ github.workspace }}/midscene_run/evidence/${{ matrix.label }}
+      EVIDENCE_LABEL: ${{ matrix.label }}
+      EXPECTED_WORKING: ${{ matrix.expected_working }}
+      APP_BUNDLE_ID: ${{ matrix.bundle_id }}
+
+    steps:
+      - name: Checkout evidence harness
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Select Xcode 26
+        shell: bash
+        run: |
+          XCODE_PATH="$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -n1)"
+          test -n "$XCODE_PATH"
+          echo "DEVELOPER_DIR=$XCODE_PATH/Contents/Developer" >> "$GITHUB_ENV"
+
+      - name: Inspect interactive desktop
+        shell: bash
+        run: |
+          mkdir -p "$EVIDENCE_OUTPUT_DIR"
+          {
+            sw_vers
+            system_profiler SPDisplaysDataType
+            osascript -e 'tell application "System Events" to return UI elements enabled'
+          } | tee "$EVIDENCE_OUTPUT_DIR/runner-environment.log"
+
+      - name: Prepare source under test
+        shell: bash
+        run: |
+          SOURCE="$RUNNER_TEMP/tinycast-buttons-${EVIDENCE_LABEL}"
+          git worktree add --detach "$SOURCE" "${{ matrix.target_ref }}"
+          git -C "$SOURCE" apply \
+            "$GITHUB_WORKSPACE/Scripts/quick-action-buttons-ci-overlay.patch"
+          echo "SOURCE=$SOURCE" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Install Midscene
+        shell: bash
+        run: |
+          MIDSCENE_HOME="$RUNNER_TEMP/midscene"
+          mkdir -p "$MIDSCENE_HOME"
+          npm install --prefix "$MIDSCENE_HOME" --no-package-lock @midscene/computer@1.13.0
+          echo "NODE_PATH=$MIDSCENE_HOME/node_modules" >> "$GITHUB_ENV"
+
+      - name: Build test helper
+        shell: bash
+        run: |
+          xcrun swiftc Scripts/quick-action-buttons-ci.swift \
+            -framework AppKit -framework CoreGraphics \
+            -o "$RUNNER_TEMP/quick-action-buttons-ci"
+          echo "BUTTONS_CI_HELPER=$RUNNER_TEMP/quick-action-buttons-ci" >> "$GITHUB_ENV"
+
+      - name: Build Tinycast
+        shell: bash
+        run: |
+          PRODUCT_NAME="Tinycast Buttons ${EVIDENCE_LABEL}"
+          DERIVED_DATA="$RUNNER_TEMP/DerivedData-${EVIDENCE_LABEL}"
+          xcodebuild -project "$SOURCE/Tinycast.xcodeproj" -scheme Tinycast \
+            -configuration Debug -derivedDataPath "$DERIVED_DATA" \
+            CODE_SIGNING_ALLOWED=NO PRODUCT_NAME="$PRODUCT_NAME" \
+            PRODUCT_BUNDLE_IDENTIFIER="$APP_BUNDLE_ID" build
+          APP_PATH="$DERIVED_DATA/Build/Products/Debug/${PRODUCT_NAME}.app"
+          test -d "$APP_PATH"
+          echo "APP_PATH=$APP_PATH" >> "$GITHUB_ENV"
+          echo "APP_PROCESS_NAME=$PRODUCT_NAME" >> "$GITHUB_ENV"
+
+      - name: Prepare Tinycast
+        shell: bash
+        run: |
+          defaults write "$APP_BUNDLE_ID" showInMenuBar -bool false
+          defaults write "$APP_BUNDLE_ID" quickActionButtonsCITest -bool true
+          SUPPORT="$HOME/Library/Application Support/$APP_BUNDLE_ID"
+          mkdir -p "$SUPPORT"
+          touch "$SUPPORT/onboarded"
+
+      - name: Reproduce with Midscene aiAct
+        shell: bash
+        run: node Scripts/quick-action-buttons-midscene.cjs
+
+      - name: Upload Midscene report and evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: quick-action-buttons-${{ matrix.label }}
+          path: |
+            midscene_run/report/quick-action-buttons-${{ matrix.label }}.html
+            midscene_run/evidence/${{ matrix.label }}
+          if-no-files-found: error
+          retention-days: 30
