@@ -1,0 +1,32 @@
+{
+  "label": "before",
+  "expectedWorking": null,
+  "interactionMode": "aiAct clicks with geometry fallback + deterministic outcome checks",
+  "scenario": "Translation result panel Copy, Replace, and Dismiss buttons",
+  "observations": {
+    "copy": {
+      "worked": true,
+      "aiActWorked": false,
+      "fallbackUsed": true,
+      "panelWindowCount": 1
+    },
+    "replace": {
+      "worked": true,
+      "aiActWorked": false,
+      "fallbackUsed": true,
+      "panelWindowCount": 0
+    },
+    "dismiss": {
+      "worked": true,
+      "aiActWorked": false,
+      "fallbackUsed": true,
+      "panelWindowCount": 0
+    }
+  },
+  "environment": {
+    "available": true,
+    "platform": "darwin",
+    "displays": 1
+  },
+  "modelCalls": 6
+}
