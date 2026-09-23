@@ -20,7 +20,7 @@ diff --git a/Tinycast/App/AppCore.swift b/Tinycast/App/AppCore.swift
 diff --git a/Tinycast/Features/QuickActions/UI/QuickActionCoordinator.swift b/Tinycast/Features/QuickActions/UI/QuickActionCoordinator.swift
 --- a/Tinycast/Features/QuickActions/UI/QuickActionCoordinator.swift
 +++ b/Tinycast/Features/QuickActions/UI/QuickActionCoordinator.swift
-@@ -309,6 +309,27 @@ final class QuickActionCoordinator {
+@@ -309,6 +309,30 @@ final class QuickActionCoordinator {
              })
      }
  
@@ -33,7 +33,6 @@ diff --git a/Tinycast/Features/QuickActions/UI/QuickActionCoordinator.swift b/Ti
 +            action: .translate,
 +            original: "Hello from Tinycast",
 +            targetLanguage: Locale.Language(identifier: "fr"))
-+        state.finish("Bonjour from Tinycast")
 +        panels.present(
 +            state,
 +            metrics: settings.interfaceSize.metrics,
@@ -42,6 +41,10 @@ diff --git a/Tinycast/Features/QuickActions/UI/QuickActionCoordinator.swift b/Ti
 +            onReplace: { text in
 +                UserDefaults.standard.set(text, forKey: "quickActionButtonsCIReplacedText")
 +            })
++        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
++            state.finish("Bonjour from Tinycast")
++            UserDefaults.standard.set(true, forKey: "quickActionButtonsCIReady")
++        }
 +    }
 +#endif
 +

@@ -61,6 +61,15 @@ async function waitForWindowCount(helper, bundleID, predicate, timeout = 15_000)
   throw new Error(`Timed out waiting for Tinycast window count; last count: ${count}`);
 }
 
+async function waitForDefault(bundleID, key, expected, timeout = 15_000) {
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) {
+    if (defaultValue(bundleID, key) === expected) return;
+    await sleep(250);
+  }
+  throw new Error(`Timed out waiting for ${key} to become ${expected}`);
+}
+
 function stopApp(processName) {
   try {
     execFileSync('/usr/bin/killall', [processName], { stdio: 'ignore' });
@@ -72,12 +81,14 @@ async function launchPanel(appPath, helper, bundleID) {
     if (error) process.stderr.write(`open failed: ${error}\n`);
   });
   await waitForWindowCount(helper, bundleID, (count) => count > 0);
-  await sleep(750);
+  await waitForDefault(bundleID, 'quickActionButtonsCIReady', '1');
+  await sleep(250);
 }
 
 async function restartPanel(appPath, processName, helper, bundleID) {
   stopApp(processName);
   await waitForWindowCount(helper, bundleID, (count) => count === 0);
+  deleteDefault(bundleID, 'quickActionButtonsCIReady');
   await launchPanel(appPath, helper, bundleID);
 }
 
