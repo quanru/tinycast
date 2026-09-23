@@ -2,7 +2,7 @@ import AppKit
 import CoreGraphics
 import Foundation
 
-guard CommandLine.arguments.count == 3 else {
+guard CommandLine.arguments.count == 3 || CommandLine.arguments.count == 5 else {
     FileHandle.standardError.write(
         Data("usage: helper <visible-window-count|window-bounds> <bundle-id>\n".utf8))
     exit(2)
@@ -11,7 +11,28 @@ guard CommandLine.arguments.count == 3 else {
 let command = CommandLine.arguments[1]
 let bundleID = CommandLine.arguments[2]
 
-guard ["visible-window-count", "window-bounds"].contains(command) else {
+if command == "mouse-down" || command == "mouse-up" {
+    guard
+        CommandLine.arguments.count == 5,
+        let x = Double(CommandLine.arguments[3]),
+        let y = Double(CommandLine.arguments[4])
+    else {
+        FileHandle.standardError.write(Data("mouse event needs numeric x and y\n".utf8))
+        exit(2)
+    }
+    let type: CGEventType = command == "mouse-down" ? .leftMouseDown : .leftMouseUp
+    let event = CGEvent(
+        mouseEventSource: nil,
+        mouseType: type,
+        mouseCursorPosition: CGPoint(x: x, y: y),
+        mouseButton: .left)
+    guard let event else { exit(1) }
+    event.post(tap: .cghidEventTap)
+    exit(0)
+}
+
+guard CommandLine.arguments.count == 3,
+      ["visible-window-count", "window-bounds"].contains(command) else {
     FileHandle.standardError.write(Data("unknown command: \(command)\n".utf8))
     exit(2)
 }

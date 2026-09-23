@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   evidence:
-    name: ${{ matrix.label }} behavior
+    name: ${{ matrix.label }} visual feedback
     runs-on: macos-26-intel
     timeout-minutes: 30
     strategy:
@@ -18,13 +18,9 @@ jobs:
       matrix:
         include:
           - label: before
-            target_ref: c2de79843666119680f5d901c6aba319b978c0cb
-            expected_working: observe
-            bundle_id: com.tinycast.buttons-ci.before
-          - label: after
             target_ref: d93a09baac74da20a10dedf00b92834ce4c49b04
-            expected_working: observe
-            bundle_id: com.tinycast.buttons-ci.after
+            expected_working: "false"
+            bundle_id: com.tinycast.buttons-ci.before
     env:
       MIDSCENE_MODEL_API_KEY: ${{ secrets.MIDSCENE_MODEL_API_KEY }}
       MIDSCENE_MODEL_NAME: ${{ vars.MIDSCENE_MODEL_NAME }}

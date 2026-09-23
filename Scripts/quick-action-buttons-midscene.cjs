@@ -1,4 +1,5 @@
 const { execFile, execFileSync } = require('node:child_process');
+const { createHash } = require('node:crypto');
 const { mkdir, writeFile } = require('node:fs/promises');
 const path = require('node:path');
 
@@ -100,7 +101,9 @@ function buttonPoint(bounds, button) {
 
 async function saveScreenshot(device, outputDir, name) {
   const screenshot = await device.screenshotBase64();
-  await writeFile(path.join(outputDir, `${name}.png`), screenshotBuffer(screenshot));
+  const buffer = screenshotBuffer(screenshot);
+  await writeFile(path.join(outputDir, `${name}.png`), buffer);
+  return createHash('sha256').update(buffer).digest('hex');
 }
 
 async function main() {
@@ -119,8 +122,8 @@ async function main() {
   const summary = {
     label,
     expectedWorking,
-    interactionMode: 'aiAct clicks with geometry fallback + deterministic outcome checks',
-    scenario: 'Translation result panel Copy, Replace, and Dismiss buttons',
+    interactionMode: 'aiAct hover with deterministic hover and held-mouse fallback',
+    scenario: 'Translation result buttons should visually distinguish hover from mouse-down',
     observations: {},
   };
   let device;
@@ -168,46 +171,43 @@ async function main() {
     for (const testCase of cases) {
       testCase.reset();
       await restartPanel(appPath, processName, helper, bundleID);
-      await saveScreenshot(device, outputDir, `${testCase.name}-before`);
+      const point = buttonPoint(windowBounds(helper, bundleID), testCase.button);
       await agent.aiAct(
-        `Click the ${testCase.button} button in the Tinycast Translate result panel exactly once.`,
+        `Move the pointer over the ${testCase.button} button without clicking it.`,
       );
-      await sleep(750);
-      const aiActWorked = testCase.worked();
-      let fallbackUsed = false;
-      if (!aiActWorked) {
-        fallbackUsed = true;
-        if (windowCount(helper, bundleID) === 0) {
-          await restartPanel(appPath, processName, helper, bundleID);
-        }
-        const point = buttonPoint(windowBounds(helper, bundleID), testCase.button);
-        await agent.callActionInActionSpace('Tap', {
-          locate: {
-            prompt: `${testCase.button} button in the Tinycast Translate result panel`,
-            locatedPixelResult: { center: point },
-          },
-        });
-        await sleep(750);
+      await agent.callActionInActionSpace('Hover', {
+        locate: {
+          prompt: `${testCase.button} button in the Tinycast Translate result panel`,
+          locatedPixelResult: { center: point },
+        },
+      });
+      await sleep(500);
+      const hoverHash = await saveScreenshot(device, outputDir, `${testCase.name}-hover`);
+      let pressedHash;
+      try {
+        execFileSync(helper, ['mouse-down', bundleID, String(point[0]), String(point[1])]);
+        await sleep(250);
+        pressedHash = await saveScreenshot(device, outputDir, `${testCase.name}-pressed`);
+      } finally {
+        execFileSync(helper, ['mouse-up', bundleID, String(point[0]), String(point[1])]);
       }
+      await sleep(500);
       summary.observations[testCase.name] = {
         worked: testCase.worked(),
-        aiActWorked,
-        fallbackUsed,
+        hoverHash,
+        pressedHash,
+        hoverAndPressedAreIdentical: hoverHash === pressedHash,
         panelWindowCount: windowCount(helper, bundleID),
       };
-      await saveScreenshot(device, outputDir, `${testCase.name}-after`);
+      await saveScreenshot(device, outputDir, `${testCase.name}-released`);
     }
 
-    const actual = Object.fromEntries(
-      Object.entries(summary.observations).map(([name, observation]) => [name, observation.worked]),
-    );
     summary.modelCalls = agent.metrics.calls;
-    const unexpected = expectedWorking === null
-      ? []
-      : Object.entries(actual).filter(([, worked]) => worked !== expectedWorking);
+    const unexpected = expectedWorking === null ? [] : Object.entries(summary.observations)
+      .filter(([, observation]) => observation.hoverAndPressedAreIdentical === expectedWorking);
     if (unexpected.length) {
       throw new Error(
-        `Unexpected button outcomes: ${JSON.stringify(actual)}, expected each to be ${expectedWorking}`,
+        `Unexpected visual feedback outcomes: ${JSON.stringify(summary.observations)}`,
       );
     }
     if (summary.modelCalls < 3) {
