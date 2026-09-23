@@ -82,7 +82,8 @@ async function restartPanel(appPath, processName, helper, bundleID) {
 }
 
 function buttonPoint(bounds, button) {
-  const rightInset = { Copy: 125, Replace: 55, Dismiss: 194 }[button];
+  // Exercise the pill's padding rather than its Text child: movable-window hit testing differs there.
+  const rightInset = { Copy: 146, Replace: 84, Dismiss: 222 }[button];
   return [bounds.x + bounds.width - rightInset, bounds.y + bounds.height - 29];
 }
 
