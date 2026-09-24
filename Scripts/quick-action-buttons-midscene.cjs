@@ -111,7 +111,10 @@ async function saveWindowScreenshot(helper, bundleID, outputDir, name) {
   const outputPath = path.join(outputDir, `${name}.png`);
   execFileSync('/usr/sbin/screencapture', ['-x', '-l', String(bounds.id), outputPath]);
   const buffer = await readFile(outputPath);
-  return createHash('sha256').update(buffer).digest('hex');
+  return {
+    base64: `data:image/png;base64,${buffer.toString('base64')}`,
+    hash: createHash('sha256').update(buffer).digest('hex'),
+  };
 }
 
 async function main() {
@@ -191,23 +194,67 @@ async function main() {
       });
       await sleep(500);
       await saveScreenshot(device, outputDir, `${testCase.name}-hover-desktop`);
-      const hoverHash = await saveWindowScreenshot(
+      const hoverFrame = await saveWindowScreenshot(
         helper, bundleID, outputDir, `${testCase.name}-hover`);
-      let pressedHash;
+      const reportFrames = [{
+        base64: hoverFrame.base64,
+        description: `${testCase.button}: hover state before mouse-down`,
+      }];
+      const pressedFrames = [];
+      const observer = await agent.startObserving({
+        intervalMs: 200,
+        maxFrames: 12,
+        watchdogMs: 10_000,
+      });
+      let observation;
       try {
         execFileSync(helper, ['mouse-down', bundleID, String(point[0]), String(point[1])]);
-        await sleep(250);
-        pressedHash = await saveWindowScreenshot(
-          helper, bundleID, outputDir, `${testCase.name}-pressed`);
+        for (let frameIndex = 1; frameIndex <= 5; frameIndex += 1) {
+          await sleep(120);
+          const frame = await saveWindowScreenshot(
+            helper,
+            bundleID,
+            outputDir,
+            `${testCase.name}-pressed-${frameIndex}`,
+          );
+          pressedFrames.push(frame);
+          reportFrames.push({
+            base64: frame.base64,
+            description: `${testCase.button}: held mouse-down frame ${frameIndex}/5`,
+          });
+        }
       } finally {
         execFileSync(helper, ['mouse-up', bundleID, String(point[0]), String(point[1])]);
+        observation = await observer.stop();
       }
       await sleep(500);
+      let observationAssertionPassed = false;
+      let observationAssertionError;
+      try {
+        await observation.aiAssert(
+          `During this sequence, the ${testCase.button} button visibly changes from its hover appearance to a distinct pressed or highlighted appearance while the mouse is held down.`,
+        );
+        observationAssertionPassed = true;
+      } catch (error) {
+        observationAssertionError = error instanceof Error ? error.message : String(error);
+      } finally {
+        await observation.dispose();
+      }
+      await agent.recordToReport(`${testCase.button} hover and held-press frames`, {
+        content:
+          'Window-only captures sampled throughout mouse-down; use the report timeline to compare frames.',
+        screenshots: reportFrames,
+      });
+      const pressedHashes = pressedFrames.map((frame) => frame.hash);
       summary.observations[testCase.name] = {
         worked: testCase.worked(),
-        hoverHash,
-        pressedHash,
-        hoverAndPressedAreIdentical: hoverHash === pressedHash,
+        hoverHash: hoverFrame.hash,
+        pressedHashes,
+        hoverAndPressedAreIdentical: pressedHashes.every(
+          (pressedHash) => pressedHash === hoverFrame.hash),
+        observedFrameCount: observation.frameCount,
+        observationAssertionPassed,
+        observationAssertionError,
         panelWindowCount: windowCount(helper, bundleID),
       };
       await saveScreenshot(device, outputDir, `${testCase.name}-released`);
