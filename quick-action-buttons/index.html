@@ -17,11 +17,11 @@
   </head>
   <body>
     <h1>Tinycast translation result buttons</h1>
-    <p>Midscene CI evidence for <code>abue-ammar/tinycast#1068</code>. The visual reproduction holds each button down and compares its panel capture with the hover state.</p>
+    <p>Midscene CI evidence for <code>abue-ammar/tinycast#1068</code>. Each report uses <code>startObserving()</code> and window-level frame sampling while a button is held down.</p>
     <div class="links">
       <a class="card" href="./visual-before/"><h2>Before</h2><span>Hover and pressed captures are byte-identical for all three buttons.</span></a>
-      <div class="card"><h2>After</h2><span>Pending issue approval and the production fix.</span></div>
+      <a class="card" href="./visual-after/"><h2>After</h2><span>All three buttons have a distinct pressed state; actions still execute.</span></a>
     </div>
-    <p>The actions themselves still execute. The missing state is purely visual. Each report records <code>aiAct</code> attempts and uses deterministic Midscene hover plus held mouse events for reproducible evidence.</p>
+    <p>The actions execute in both builds. Each report records <code>aiAct</code>, five continuously observed frames, and five panel-only held-mouse frames for a direct visual comparison.</p>
   </body>
 </html>

@@ -6,23 +6,47 @@
   "observations": {
     "copy": {
       "worked": true,
-      "hoverHash": "b0d69c74216bf7f2a0d2c18edfd1fe1a170acaa432c4388e545442fbdb6a08a4",
-      "pressedHash": "b0d69c74216bf7f2a0d2c18edfd1fe1a170acaa432c4388e545442fbdb6a08a4",
+      "hoverHash": "91092b5eed51ab92002d4efa4e1d8139c048da944cd07116a61d17772c93d0ae",
+      "pressedHashes": [
+        "91092b5eed51ab92002d4efa4e1d8139c048da944cd07116a61d17772c93d0ae",
+        "91092b5eed51ab92002d4efa4e1d8139c048da944cd07116a61d17772c93d0ae",
+        "91092b5eed51ab92002d4efa4e1d8139c048da944cd07116a61d17772c93d0ae",
+        "91092b5eed51ab92002d4efa4e1d8139c048da944cd07116a61d17772c93d0ae",
+        "91092b5eed51ab92002d4efa4e1d8139c048da944cd07116a61d17772c93d0ae"
+      ],
       "hoverAndPressedAreIdentical": true,
+      "observedFrameCount": 5,
+      "observationInsight": "Unable to determine: The image data is incomplete/truncated, and no visual content is available to observe the Copy button's hover or pressed states.",
       "panelWindowCount": 1
     },
     "replace": {
       "worked": true,
-      "hoverHash": "6a26ca643bffbaa451cca6afc1c96444a844caeee631f3a9443a006ac590b594",
-      "pressedHash": "6a26ca643bffbaa451cca6afc1c96444a844caeee631f3a9443a006ac590b594",
+      "hoverHash": "dedae1bb15a5453a47d4f6053f95832277f683db500b43ecceedb9171ff57de1",
+      "pressedHashes": [
+        "dedae1bb15a5453a47d4f6053f95832277f683db500b43ecceedb9171ff57de1",
+        "dedae1bb15a5453a47d4f6053f95832277f683db500b43ecceedb9171ff57de1",
+        "dedae1bb15a5453a47d4f6053f95832277f683db500b43ecceedb9171ff57de1",
+        "dedae1bb15a5453a47d4f6053f95832277f683db500b43ecceedb9171ff57de1",
+        "dedae1bb15a5453a47d4f6053f95832277f683db500b43ecceedb9171ff57de1"
+      ],
       "hoverAndPressedAreIdentical": true,
+      "observedFrameCount": 5,
+      "observationInsight": "Cannot determine from the provided data; the image content is invalid or incomplete, and no visual evidence is available to assess the Replace button's hover or pressed state changes.",
       "panelWindowCount": 0
     },
     "dismiss": {
       "worked": true,
-      "hoverHash": "7b22d0319a0f198f576c33e967a62f1a25f5a56dc2546c9ef528990523e138f2",
-      "pressedHash": "7b22d0319a0f198f576c33e967a62f1a25f5a56dc2546c9ef528990523e138f2",
+      "hoverHash": "4c7478649b7d7816c5cd824ac14aeaefd24d31f263caf80259c0c6cd10de2ce2",
+      "pressedHashes": [
+        "4c7478649b7d7816c5cd824ac14aeaefd24d31f263caf80259c0c6cd10de2ce2",
+        "4c7478649b7d7816c5cd824ac14aeaefd24d31f263caf80259c0c6cd10de2ce2",
+        "4c7478649b7d7816c5cd824ac14aeaefd24d31f263caf80259c0c6cd10de2ce2",
+        "4c7478649b7d7816c5cd824ac14aeaefd24d31f263caf80259c0c6cd10de2ce2",
+        "4c7478649b7d7816c5cd824ac14aeaefd24d31f263caf80259c0c6cd10de2ce2"
+      ],
       "hoverAndPressedAreIdentical": true,
+      "observedFrameCount": 5,
+      "observationInsight": "Unable to determine from the provided screenshots due to incomplete image data.",
       "panelWindowCount": 0
     }
   },
@@ -31,5 +55,5 @@
     "platform": "darwin",
     "displays": 1
   },
-  "modelCalls": 6
+  "modelCalls": 9
 }
