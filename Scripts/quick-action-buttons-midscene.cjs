@@ -182,10 +182,16 @@ async function main() {
     for (const testCase of cases) {
       testCase.reset();
       await restartPanel(appPath, processName, helper, bundleID);
-      const point = buttonPoint(windowBounds(helper, bundleID), testCase.button);
+      let point = buttonPoint(windowBounds(helper, bundleID), testCase.button);
       await agent.aiAct(
         `Move the pointer over the ${testCase.button} button without clicking it.`,
       );
+      // aiAct is intentionally exercised, but an imprecise model action must not
+      // make the pixel-level evidence flaky by accidentally activating the button.
+      if (windowCount(helper, bundleID) === 0) {
+        await restartPanel(appPath, processName, helper, bundleID);
+      }
+      point = buttonPoint(windowBounds(helper, bundleID), testCase.button);
       await agent.callActionInActionSpace('Hover', {
         locate: {
           prompt: `${testCase.button} button in the Tinycast Translate result panel`,
