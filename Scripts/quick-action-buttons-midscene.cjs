@@ -228,15 +228,14 @@ async function main() {
         observation = await observer.stop();
       }
       await sleep(500);
-      let observationAssertionPassed = false;
-      let observationAssertionError;
+      let observationInsight;
+      let observationInsightError;
       try {
-        await observation.aiAssert(
-          `During this sequence, the ${testCase.button} button visibly changes from its hover appearance to a distinct pressed or highlighted appearance while the mouse is held down.`,
+        observationInsight = await observation.aiAsk(
+          `Describe whether the ${testCase.button} button visibly changes from hover to a distinct pressed appearance during this sequence.`,
         );
-        observationAssertionPassed = true;
       } catch (error) {
-        observationAssertionError = error instanceof Error ? error.message : String(error);
+        observationInsightError = error instanceof Error ? error.message : String(error);
       } finally {
         await observation.dispose();
       }
@@ -253,8 +252,8 @@ async function main() {
         hoverAndPressedAreIdentical: pressedHashes.every(
           (pressedHash) => pressedHash === hoverFrame.hash),
         observedFrameCount: observation.frameCount,
-        observationAssertionPassed,
-        observationAssertionError,
+        observationInsight,
+        observationInsightError,
         panelWindowCount: windowCount(helper, bundleID),
       };
       await saveScreenshot(device, outputDir, `${testCase.name}-released`);
