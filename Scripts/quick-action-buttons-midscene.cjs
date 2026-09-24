@@ -151,7 +151,7 @@ async function main() {
     await device.connect();
     agent = new ComputerAgent(device, {
       groupName: `Tinycast quick action buttons ${label}`,
-      groupDescription: 'Translation result buttons should respond to pointer clicks',
+      groupDescription: 'Translation result buttons should visibly distinguish hover and press',
       reportFileName: `quick-action-buttons-${label}`,
       autoPrintReportMsg: false,
       generateReport: true,
