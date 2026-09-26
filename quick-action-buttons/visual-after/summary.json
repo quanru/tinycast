@@ -1,59 +1,13 @@
 {
-  "label": "after",
-  "expectedWorking": true,
-  "interactionMode": "aiAct hover with deterministic hover and held-mouse fallback",
-  "scenario": "Translation result buttons should visually distinguish hover from mouse-down",
-  "observations": {
-    "copy": {
-      "worked": true,
-      "hoverHash": "e5d232edcf02696cac7352c5de5f8c4a09ede18cc3f7468a3790b9d59e042560",
-      "pressedHashes": [
-        "68e553c5720abd38a1411c45e465bef541516712f799fde85767eaec66a6a45a",
-        "68e553c5720abd38a1411c45e465bef541516712f799fde85767eaec66a6a45a",
-        "68e553c5720abd38a1411c45e465bef541516712f799fde85767eaec66a6a45a",
-        "68e553c5720abd38a1411c45e465bef541516712f799fde85767eaec66a6a45a",
-        "68e553c5720abd38a1411c45e465bef541516712f799fde85767eaec66a6a45a"
-      ],
-      "hoverAndPressedAreIdentical": false,
-      "observedFrameCount": 5,
-      "observationInsight": "Cannot determine from the provided screenshots; the image data is incomplete and no UI elements are visible.",
-      "panelWindowCount": 1
-    },
-    "replace": {
-      "worked": true,
-      "hoverHash": "3151809aef7683306c7429f359f862681dbf6c761cd015c0b0bf066c3195a515",
-      "pressedHashes": [
-        "0a0b20f39b9d4e54726bd2652832b4aa98c4fcc7b565f8ac95c835d82a606632",
-        "0a0b20f39b9d4e54726bd2652832b4aa98c4fcc7b565f8ac95c835d82a606632",
-        "0a0b20f39b9d4e54726bd2652832b4aa98c4fcc7b565f8ac95c835d82a606632",
-        "0a0b20f39b9d4e54726bd2652832b4aa98c4fcc7b565f8ac95c835d82a606632",
-        "0a0b20f39b9d4e54726bd2652832b4aa98c4fcc7b565f8ac95c835d82a606632"
-      ],
-      "hoverAndPressedAreIdentical": false,
-      "observedFrameCount": 5,
-      "observationInsight": "Unable to determine from the provided data; the screenshots are incomplete or unreadable.",
-      "panelWindowCount": 0
-    },
-    "dismiss": {
-      "worked": true,
-      "hoverHash": "e170cb322dff2c8c282eeb26442b9f75d2cdf88d661fa68ce9e48965cfe93648",
-      "pressedHashes": [
-        "98eaf3c6a6f51f1dd09e9211dd2b50db3f17e9a2ac0bfbbc449e87c28238732b",
-        "98eaf3c6a6f51f1dd09e9211dd2b50db3f17e9a2ac0bfbbc449e87c28238732b",
-        "98eaf3c6a6f51f1dd09e9211dd2b50db3f17e9a2ac0bfbbc449e87c28238732b",
-        "98eaf3c6a6f51f1dd09e9211dd2b50db3f17e9a2ac0bfbbc449e87c28238732b",
-        "98eaf3c6a6f51f1dd09e9211dd2b50db3f17e9a2ac0bfbbc449e87c28238732b"
-      ],
-      "hoverAndPressedAreIdentical": false,
-      "observedFrameCount": 5,
-      "observationInsight": "Cannot determine from the provided screenshots due to insufficient image data.",
-      "panelWindowCount": 0
-    }
-  },
+  "midsceneVersion": "local change-focus build",
+  "api": "startObserving + change-focus + aiAssert",
+  "intervalMs": 200,
+  "heldMouseDownMs": 800,
   "environment": {
     "available": true,
     "platform": "darwin",
     "displays": 1
   },
-  "modelCalls": 9
+  "frameCount": 5,
+  "assertionPassed": true
 }
