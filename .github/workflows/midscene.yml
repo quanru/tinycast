@@ -8,9 +8,6 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
-concurrency:
-  group: tinycast-midscene-${{ github.ref }}
-  cancel-in-progress: false
 jobs:
   validation:
     name: Harness validation (no model secrets)
