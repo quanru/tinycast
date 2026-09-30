@@ -1,0 +1,226 @@
+name: Midscene desktop E2E
+on:
+  pull_request:
+    paths: ['Tinycast/**', 'Tests/**', 'Scripts/**', 'project.yml', 'Tinycast.xcodeproj/**', '.swiftlint.yml', '.github/workflows/midscene.yml']
+  push:
+    branches: ['**']
+    paths: ['Tinycast/**', 'Tests/**', 'Scripts/**', 'project.yml', 'Tinycast.xcodeproj/**', '.swiftlint.yml', '.github/workflows/midscene.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: tinycast-midscene-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  validation:
+    name: Harness validation (no model secrets)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: Tests/Midscene/package-lock.json
+      - run: npm ci --ignore-scripts
+        working-directory: Tests/Midscene
+      - run: npm run check
+        working-directory: Tests/Midscene
+  swift:
+    name: Swift regression, lint and build (no model secrets)
+    runs-on: macos-26-intel
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Select Xcode 26
+        run: |
+          XCODE_PATH="$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -n1)"
+          test -n "$XCODE_PATH"
+          echo "DEVELOPER_DIR=$XCODE_PATH/Contents/Developer" >> "$GITHUB_ENV"
+      - name: Run every Swift harness
+        run: ./Scripts/run-tests.sh
+      - name: Lint Swift and settings search
+        run: |
+          command -v swiftlint >/dev/null || brew install swiftlint
+          ./Scripts/lint.sh
+      - name: Check pure model layers
+        run: |
+          if rg -l 'import (AppKit|SwiftUI|Cocoa)' Tinycast/Features/*/Model/; then
+            echo '::error::Model layers must not import UI frameworks'
+            exit 1
+          fi
+      - name: Build Debug app without signing credentials
+        run: |
+          xcodebuild -project Tinycast.xcodeproj -scheme Tinycast -configuration Debug \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" CODE_SIGNING_ALLOWED=NO build
+  desktop-capability:
+    name: Hosted macOS 26 Intel desktop capability (no model secrets)
+    runs-on: macos-26-intel
+    continue-on-error: true
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+        working-directory: Tests/Midscene
+      - name: Check desktop permissions and SDK health
+        run: node --experimental-strip-types scripts/desktop-health.ts
+        working-directory: Tests/Midscene
+      - name: Record capability results
+        if: always()
+        run: cat Tests/Midscene/desktop-health/summary.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: hosted-macos-desktop-health
+          path: Tests/Midscene/desktop-health/
+          retention-days: 14
+  visual:
+    needs: [validation, desktop-capability]
+    # Every PR stays secret-free; repository owners explicitly enable trusted refs.
+    if: >-
+      vars.MIDSCENE_DESKTOP_ENABLED == 'true' &&
+      github.event_name != 'pull_request' &&
+      (github.ref == format('refs/heads/{0}', github.event.repository.default_branch) ||
+       github.ref == vars.MIDSCENE_TRUSTED_REF)
+    runs-on: macos-26-intel
+    timeout-minutes: 35
+    concurrency:
+      group: tinycast-midscene-desktop
+      cancel-in-progress: false
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        shard: [calculator, launcher]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: Tests/Midscene/package-lock.json
+      - run: npm ci
+        working-directory: Tests/Midscene
+      - name: Clear previous reports
+        working-directory: Tests/Midscene
+        run: node -e "require('fs').rmSync('midscene_run', {recursive:true, force:true})"
+      - name: Select Xcode 26
+        run: |
+          XCODE_PATH="$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -n1)"
+          test -n "$XCODE_PATH"
+          echo "DEVELOPER_DIR=$XCODE_PATH/Contents/Developer" >> "$GITHUB_ENV"
+      - name: Build isolated test app
+        run: |
+          xcodebuild -project Tinycast.xcodeproj -scheme Tinycast -configuration Debug \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" CODE_SIGNING_ALLOWED=NO build
+      - name: Run visual shard
+        working-directory: Tests/Midscene
+        env:
+          TINYCAST_APP_PATH: ${{ runner.temp }}/DerivedData/Build/Products/Debug/Tinycast Dev.app
+          MIDSCENE_DESKTOP_ENABLED: '1'
+          MIDSCENE_SHARD: ${{ matrix.shard }}
+          MIDSCENE_MODEL_API_KEY: ${{ secrets.MIDSCENE_MODEL_API_KEY }}
+          MIDSCENE_MODEL_NAME: ${{ secrets.MIDSCENE_MODEL_NAME }}
+          MIDSCENE_MODEL_BASE_URL: ${{ secrets.MIDSCENE_MODEL_BASE_URL }}
+          MIDSCENE_MODEL_FAMILY: ${{ secrets.MIDSCENE_MODEL_FAMILY }}
+        run: npm test
+      - name: Preserve shard reports even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: midscene-${{ matrix.shard }}
+          path: Tests/Midscene/midscene_run/
+          if-no-files-found: warn
+          retention-days: 14
+  reports:
+    needs: visual
+    if: always() && needs.visual.result != 'skipped'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --ignore-scripts
+        working-directory: Tests/Midscene
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: midscene-calculator
+          path: Tests/Midscene/midscene_run/midscene-calculator
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: midscene-launcher
+          path: Tests/Midscene/midscene_run/midscene-launcher
+      - name: Merge native reports and render case table
+        id: merge
+        continue-on-error: true
+        working-directory: Tests/Midscene
+        env:
+          MIDSCENE_REPORT_URL: ${{ vars.MIDSCENE_PAGES_URL != '' && format('{0}/runs/{1}/{2}', vars.MIDSCENE_PAGES_URL, github.run_id, github.run_attempt) || '' }}
+        run: npm run report
+      - name: Preserve all available reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: midscene-combined
+          path: Tests/Midscene/midscene_run/
+          retention-days: 14
+      - name: Require complete reports
+        if: steps.merge.outcome != 'success'
+        run: exit 1
+  publish:
+    needs: reports
+    if: always() && needs.reports.result != 'skipped' && vars.MIDSCENE_PAGES_URL != ''
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    concurrency:
+      group: tinycast-midscene-pages
+      cancel-in-progress: false
+    steps:
+      - name: Preserve existing Pages content
+        if: vars.MIDSCENE_PAGES_PRESERVE_REF != ''
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ vars.MIDSCENE_PAGES_PRESERVE_REF }}
+          path: pages-baseline
+          persist-credentials: false
+      - name: Stage Pages baseline
+        run: |
+          mkdir -p _site
+          if [ -d pages-baseline ]; then
+            cp -R pages-baseline/. _site/
+            rm -rf _site/.git
+          fi
+      - uses: actions/download-artifact@v4
+        with:
+          name: midscene-combined
+          path: _site/midscene/runs/${{ github.run_id }}/${{ github.run_attempt }}
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - uses: actions/deploy-pages@v4
+        id: deploy
