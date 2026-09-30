@@ -10,8 +10,9 @@ let owned = NSRunningApplication.runningApplications(withBundleIdentifier: bundl
     $0.bundleURL?.resolvingSymlinksInPath() == bundleURL
 }
 if mode == "inspect" {
-    let data = try JSONSerialization.data(withJSONObject: owned.map { Int($0.processIdentifier) })
-    print(String(decoding: data, as: UTF8.self))
+    var data = try JSONSerialization.data(withJSONObject: owned.map { Int($0.processIdentifier) })
+    data.append(0x0a)
+    FileHandle.standardOutput.write(data)
 } else if mode == "stop" {
     for application in owned { application.terminate() }
     for _ in 0..<50 {
