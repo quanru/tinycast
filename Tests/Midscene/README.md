@@ -2,6 +2,10 @@
 
 This package uses the native `@midscene/test` YAML runner and `@midscene/computer` desktop agent. User operations are `aiAct` and visible outcomes are `aiAssert`; custom `app.open` only prepares and tears down the test world.
 
+Every case must include `aiAct` and end with `aiAssert` checking the final visible
+result. Intermediate outcomes should also use `aiAssert`. Model-free collection
+rejects missing assertions and actions left after the last assertion, including on PRs.
+
 The design borrows per-case isolation, trusted model execution, shard artifacts and native report
 handling from [Rome #466](https://github.com/rome-os/rome/pull/466) and
 [its follow-up #551](https://github.com/rome-os/rome/pull/551). Tinycast has a native floating

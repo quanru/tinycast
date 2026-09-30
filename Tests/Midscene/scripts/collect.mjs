@@ -3,6 +3,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { collectWorkflowDocument } from '@midscene/test';
 import { loadTestProject, discoverTestFiles } from '@midscene/test/config';
+export function validateAISteps(name, steps) {
+  if (!steps.some(s => s.node === 'aiAct') || !steps.some(s => s.node === 'aiAssert')) throw new Error(`AI-native actions/assertions required: ${name}`);
+  if (steps.at(-1)?.node !== 'aiAssert') throw new Error(`Case must end with aiAssert to verify the final visible result: ${name}`);
+}
 export async function collect(shard) {
   const root = fileURLToPath(new URL('../', import.meta.url));
   const manifest = JSON.parse(await readFile(path.join(root, 'cases.json'), 'utf8'));
@@ -17,7 +21,7 @@ export async function collect(shard) {
         const expected = manifest.find(c => c.id === name);
         if (!expected || !tags?.includes(expected.shard)) throw new Error(`Case/shard differs from manifest: ${name}`);
         if (steps[0]?.node !== 'app.open' || steps.filter(s => s.node === 'app.open').length !== 1 || steps[0].input.id !== name) throw new Error(`Case must open its own world: ${name}`);
-        if (!steps.some(s => s.node === 'aiAct') || !steps.some(s => s.node === 'aiAssert')) throw new Error(`AI-native actions/assertions required: ${name}`);
+        validateAISteps(name, steps);
         if (steps.some(s => !['app.open', 'aiAct', 'aiAssert'].includes(s.node))) throw new Error(`Unexpected node: ${name}`);
         found.set(name, expected);
       }
