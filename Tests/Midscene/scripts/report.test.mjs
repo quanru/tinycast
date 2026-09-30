@@ -29,7 +29,7 @@ test('complete table links to exact reports and screenshots', () => fixture(asyn
   const summary = await readFile(opts(root).summary, 'utf8');
   const [first] = await collect();
   assert.ok(summary.includes(`https://example.test/runs/123/2/shard/${first.id}.html`));
-  assert.match(summary, /!\[screenshot\]/);
+  assert.match(summary, /<a href="[^"]+\.html"><img src="[^"]+\.png"[^>]+width="160">/);
 }));
 test('failed merge keeps per-case files and deletes partial output', () => fixture(async (root, dir) => {
   assert.equal(await assemble({ ...opts(root), merge: async args => { await merge(args); throw new Error('merge failed'); } }), false);
@@ -47,7 +47,7 @@ test('incomplete rerun removes old merge and reports missing cases', () => fixtu
   }
   assert.equal(await assemble({ ...opts(root), merge }), false);
   await assert.rejects(access(path.join(root, 'native.html')));
-  assert.match(await readFile(opts(root).summary, 'utf8'), /missing/);
+  assert.match(await readFile(opts(root).summary, 'utf8'), /Missing/);
 }));
 test('unknown shards fail rather than silently running nothing', async () => {
   await assert.rejects(collect('typo'), /No cases/);
@@ -60,7 +60,7 @@ test('failed case retains a usable combined report and exact case links', () => 
   await access(path.join(root, 'native.html'));
   const summary = await readFile(opts(root).summary, 'utf8');
   assert.ok(summary.includes(`/shard/${results[0].id}.html`));
-  assert.match(summary, /failed/);
+  assert.match(summary, /Failed/);
 }));
 test('missing result metadata still publishes native reports and screenshots without passing', () => fixture(async (root, dir) => {
   await rm(path.join(dir, 'results.json'));
@@ -82,7 +82,7 @@ test('missing result metadata still publishes native reports and screenshots wit
   const summary = await readFile(opts(root).summary, 'utf8');
   assert.ok(summary.includes(`/shard/${first.id}.html`));
   assert.ok(summary.includes(`/shard/${first.id}.png`));
-  assert.match(summary, /\| missing \|/);
+  assert.match(summary, /\| ⚠️ Missing: No case result was recorded/);
 }));
 test('SDK automatic report copies do not conflict with canonical exports', () => fixture(async (root, dir) => {
   const [first] = await collect();
@@ -128,4 +128,62 @@ test('SDK native standalone HTML merges without a model or desktop', () => fixtu
     const merged = await readFile(path.join(root, 'native.html'), 'utf8');
     assert.match(merged, /Synthetic harness entry/);
   } finally { await agent.destroy(); }
+}));
+test('native framework steps supply exact case links and durations', () => fixture(async (root, dir) => {
+  const [first] = await collect();
+  const framework = path.join(dir, 'framework', 'native');
+  await mkdir(framework, { recursive: true });
+  const dump = { projects: [{ documents: [{ cases: [{ name: first.id, attempts: [{ durationMs: 65000, steps: [{ id: 'real-step:4', status: 'success', agentDetails: [{ executionId: 'execution' }] }] }] }] }] }] };
+  await writeFile(path.join(framework, 'index.html'), `<script type="midscene_test_run_dump">${JSON.stringify(dump)}</script>`);
+  await writeFile(path.join(dir, 'model.json'), JSON.stringify({ modelName: 'test-model' }));
+  assert.equal(await assemble({ ...opts(root), runUrl: 'https://github.com/example/repo/actions/runs/123', merge }), true);
+  const summary = await readFile(opts(root).summary, 'utf8');
+  assert.match(summary, /framework\/native\/index\.html#runner-step=real-step%3A4/);
+  assert.match(summary, /<a href="[^\"]+#runner-step=real-step%3A4"><img/);
+  assert.match(summary, /\*\*Models:\*\* test-model/);
+  assert.match(summary, /1m 5s/);
+  assert.match(summary, /actions\/runs\/123#artifacts/);
+}));
+test('failed and not-run cases precede the collapsed passed appendix', () => fixture(async (root, dir) => {
+  const results = JSON.parse(await readFile(path.join(dir, 'results.json'), 'utf8'));
+  results[1] = { ...results[1], status: 'failed', reason: 'Visible result differs', durationMs: 1200 };
+  results[2].status = 'not-run';
+  await writeFile(path.join(dir, 'results.json'), JSON.stringify(results));
+  assert.equal(await assemble({ ...opts(root), merge }), false);
+  const summary = await readFile(opts(root).summary, 'utf8');
+  assert.match(summary, /2 need attention · 1 passed/);
+  assert.match(summary, /❌ Failed: Visible result differs/);
+  assert.match(summary, /⏭️ Not run/);
+  const appendix = summary.indexOf('<summary>Appendix: passed cases (1)</summary>');
+  assert.ok(summary.indexOf('Visible result differs') < appendix);
+  assert.ok(summary.indexOf('⏭️ Not run') < appendix);
+}));
+test('single shard summary does not claim other shards are missing or run a merger', () => fixture(async (root, dir) => {
+  const cases = await collect('calculator');
+  await writeFile(path.join(dir, 'results.json'), JSON.stringify(cases.map(c => ({ id: c.id, status: 'passed' }))));
+  assert.equal(await assemble({ ...opts(root), shard: 'calculator' }), true);
+  const summary = await readFile(opts(root).summary, 'utf8');
+  assert.match(summary, /0 need attention · 2 passed/);
+  assert.doesNotMatch(summary, /launcher-fixture|Merge failed/);
+  await assert.rejects(access(path.join(root, 'native.html')));
+}));
+test('producer failure and duplicate results cannot render a false all-pass summary', () => fixture(async (root, dir) => {
+  const results = JSON.parse(await readFile(path.join(dir, 'results.json'), 'utf8'));
+  results.push(results[0]);
+  await writeFile(path.join(dir, 'results.json'), JSON.stringify(results));
+  assert.equal(await assemble({ ...opts(root), producerResult: 'failure', merge }), false);
+  const summary = await readFile(opts(root).summary, 'utf8');
+  assert.match(summary, /Duplicate case result/);
+  assert.doesNotMatch(summary, /🎉 All/);
+}));
+test('complete framework inventory merges native Test reports once instead of standalone exports', () => fixture(async (root, dir) => {
+  const cases = await collect();
+  const framework = path.join(dir, 'framework', 'native');
+  await mkdir(framework, { recursive: true });
+  const dump = { projects: [{ documents: [{ cases: cases.map(c => ({ name: c.id, status: 'success', attempts: [{ steps: [{ id: `recorded-${c.id}`, status: 'success', agentDetails: [{}] }] }] })) }] }] };
+  const index = path.join(framework, 'index.html');
+  await writeFile(index, `<script type="midscene_test_run_dump">${JSON.stringify(dump)}</script>`);
+  let selected;
+  assert.equal(await assemble({ ...opts(root), merge: async args => { selected = args.htmlPaths; return merge(args); } }), true);
+  assert.deepEqual(selected, [index]);
 }));

@@ -33,6 +33,8 @@ The GitHub workflow first verifies the `macos-26-intel` desktop, runs model-free
 
 `midscene_run/framework/` contains the native Midscene Test report; every started AI case also exports its native SDK HTML with inline screenshots, final PNG, and runtime metadata recording its isolated PID and bundle. Artifacts are retained on failure for 14 days. A new run removes stale local output before execution. Report merging uses Midscene's native HTML merger; if it fails, the available original reports are preserved and linked, and CI remains failed. Combined publication does not hide missing or failed cases.
 
+Each visual shard and the combined report job use the Rome Summary layout: attention and passed counts, recorded model names, native report and artifact links, followed by failed, missing and not-run cases. Passed cases appear in a collapsed appendix. Tables show shard, case, a 160px screenshot, status/reason and duration. Case names and screenshots link to the recorded step in the native Test report when available; standalone HTML exports remain the fallback.
+
 All three AI journeys passed on GitHub-hosted `macos-26-intel` in
 [run 36682718562](https://github.com/quanru/tinycast/actions/runs/36682718562).
 Screenshots show the expression result `60`, conversion result `25.4 cm`, and the opened

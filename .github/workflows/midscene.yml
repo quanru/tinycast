@@ -167,6 +167,7 @@ jobs:
           ditto -x -k "$RUNNER_TEMP/e2e-download/tinycast-e2e-app.zip" "$RUNNER_TEMP/e2e-app"
           test -d "$RUNNER_TEMP/e2e-app/TinycastDev.app"
       - name: Run visual shard
+        id: run-shard
         working-directory: Tests/Midscene
         env:
           TINYCAST_APP_PATH: ${{ runner.temp }}/e2e-app/TinycastDev.app
@@ -178,6 +179,7 @@ jobs:
           MIDSCENE_MODEL_FAMILY: ${{ secrets.MIDSCENE_MODEL_FAMILY }}
         run: npm test
       - name: Preserve shard reports even on failure
+        id: upload-shard
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -185,6 +187,14 @@ jobs:
           path: Tests/Midscene/midscene_run/
           if-no-files-found: warn
           retention-days: 14
+      - name: Add shard results to the job Summary
+        if: always()
+        working-directory: Tests/Midscene
+        env:
+          MIDSCENE_SUMMARY_SHARD: ${{ matrix.shard }}
+          MIDSCENE_PRODUCER_RESULT: ${{ steps.run-shard.outcome == 'success' && steps.upload-shard.outcome == 'success' && 'success' || 'failure' }}
+          MIDSCENE_REPORT_URL: ${{ vars.MIDSCENE_PAGES_URL != '' && format('{0}/runs/{1}/{2}/midscene-{3}', vars.MIDSCENE_PAGES_URL, github.run_id, github.run_attempt, matrix.shard) || '' }}
+        run: npm run report
   reports:
     needs: visual
     if: always() && !cancelled() && needs.visual.result != 'skipped'
@@ -214,6 +224,7 @@ jobs:
         working-directory: Tests/Midscene
         env:
           MIDSCENE_REPORT_URL: ${{ vars.MIDSCENE_PAGES_URL != '' && format('{0}/runs/{1}/{2}', vars.MIDSCENE_PAGES_URL, github.run_id, github.run_attempt) || '' }}
+          MIDSCENE_PRODUCER_RESULT: ${{ needs.visual.result }}
         run: npm run report
       - name: Preserve all available reports
         if: always()
