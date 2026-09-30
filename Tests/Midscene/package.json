@@ -9,7 +9,7 @@
     "test": "node --experimental-strip-types scripts/run.ts",
     "typecheck": "tsc --noEmit",
     "collect": "node scripts/collect.mjs",
-    "check": "npm run typecheck && npm run collect && npm run nodes && node --test scripts/*.test.mjs",
+    "check": "npm run typecheck && npm run collect && npm run nodes && node --experimental-strip-types --test scripts/*.test.mjs",
     "report": "node scripts/report.mjs",
     "nodes": "midscene-test nodes"
   },

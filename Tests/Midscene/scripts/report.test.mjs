@@ -41,6 +41,10 @@ test('failed merge keeps per-case files and deletes partial output', () => fixtu
 test('incomplete rerun removes old merge and reports missing cases', () => fixture(async (root, dir) => {
   await assemble({ ...opts(root), merge });
   await writeFile(path.join(dir, 'results.json'), '[]');
+  for (const c of await collect()) {
+    await rm(path.join(dir, `${c.id}.html`));
+    await rm(path.join(dir, `${c.id}.png`));
+  }
   assert.equal(await assemble({ ...opts(root), merge }), false);
   await assert.rejects(access(path.join(root, 'native.html')));
   assert.match(await readFile(opts(root).summary, 'utf8'), /missing/);
@@ -57,6 +61,45 @@ test('failed case retains a usable combined report and exact case links', () => 
   const summary = await readFile(opts(root).summary, 'utf8');
   assert.ok(summary.includes(`/shard/${results[0].id}.html`));
   assert.match(summary, /failed/);
+}));
+test('missing result metadata still publishes native reports and screenshots without passing', () => fixture(async (root, dir) => {
+  await rm(path.join(dir, 'results.json'));
+  const cases = await collect();
+  const [first] = cases;
+  const framework = path.join(dir, 'framework');
+  await mkdir(framework);
+  await writeFile(path.join(framework, 'results.json'), 'not harness metadata');
+  await writeFile(path.join(framework, `${first.id}.html`), 'nested framework output');
+  await writeFile(path.join(dir, 'unrelated.html'), 'unrelated report');
+  let selected;
+  assert.equal(await assemble({ ...opts(root), merge: async args => {
+    selected = args.htmlPaths;
+    return merge(args);
+  } }), false);
+  assert.equal(selected.length, cases.length);
+  assert.ok(selected.every(file => path.dirname(file) === dir));
+  await access(path.join(root, 'native.html'));
+  const summary = await readFile(opts(root).summary, 'utf8');
+  assert.ok(summary.includes(`/shard/${first.id}.html`));
+  assert.ok(summary.includes(`/shard/${first.id}.png`));
+  assert.match(summary, /\| missing \|/);
+}));
+test('ambiguous artifacts remain intact and are never silently selected', () => fixture(async (root, dir) => {
+  const [first] = await collect();
+  const duplicate = path.join(root, 'duplicate-shard');
+  await mkdir(duplicate);
+  await writeFile(path.join(duplicate, `${first.id}.html`), 'duplicate native report');
+  let selected;
+  assert.equal(await assemble({ ...opts(root), merge: async args => {
+    selected = args.htmlPaths;
+    return merge(args);
+  } }), false);
+  assert.ok(selected.every(file => path.basename(file) !== `${first.id}.html`));
+  await access(path.join(dir, `${first.id}.html`));
+  await access(path.join(duplicate, `${first.id}.html`));
+  const summary = await readFile(opts(root).summary, 'utf8');
+  assert.match(summary, /Ambiguous/);
+  assert.match(summary, /Files are retained; no report was selected/);
 }));
 test('SDK native standalone HTML merges without a model or desktop', () => fixture(async (root, dir) => {
   const { Agent, mergeReportFiles } = await import('@midscene/core');

@@ -432,7 +432,10 @@ final class AppCore {
                 OnboardingState.markShown()
                 onboardingCoordinator.showOnboarding()
             }
-            if isVisualTest { paletteCoordinator.showPalette(mode: .launcher) }
+            if isVisualTest {
+                NSApp.activate()
+                paletteCoordinator.showPalette(mode: .launcher)
+            }
         }
     }
 

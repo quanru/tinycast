@@ -2,6 +2,11 @@
 
 This package uses the native `@midscene/test` YAML runner and `@midscene/computer` desktop agent. User operations are `aiAct` and visible outcomes are `aiAssert`; custom `app.open` only prepares and tears down the test world.
 
+The design borrows per-case isolation, trusted model execution, shard artifacts and native report
+handling from [Rome #466](https://github.com/rome-os/rome/pull/466) and
+[its follow-up #551](https://github.com/rome-os/rome/pull/551). Tinycast has a native floating
+palette, so its application journeys use the computer agent rather than a browser context.
+
 The first cases cover arithmetic, offline unit conversion, and searching/opening a synthetic native application named E2E Lantern. They do not use an installed application, real clipboard history, external websites, or the user's Tinycast data.
 
 Each case copies the Debug application into its own temporary directory, assigns a unique `com.tinycast.app.midscene.*` bundle identifier, and prepares a private defaults domain, Application Support directory, cache and launcher search scope. Its onboarding marker and feature defaults are fixture setup. The Debug-only launch seam requires both that bundle prefix and `TINYCAST_E2E_VISIBLE=1`; it opens the real palette and disables background network fetches and global hotkey registration. Release behavior is unchanged. Teardown terminates only the launched Tinycast PID and fixture applications matching both the exact case bundle and bundle URL.

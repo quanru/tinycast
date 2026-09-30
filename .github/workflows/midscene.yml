@@ -29,8 +29,8 @@ jobs:
       - run: npm run check
         working-directory: Tests/Midscene
   swift:
-    name: Swift regression, lint and build (no model secrets)
-    runs-on: macos-26-intel
+    name: Apple silicon Swift regression, lint and build (no model secrets)
+    runs-on: macos-26
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -60,6 +60,43 @@ jobs:
         run: |
           xcodebuild -project Tinycast.xcodeproj -scheme Tinycast -configuration Debug \
             -derivedDataPath "$RUNNER_TEMP/DerivedData" CODE_SIGNING_ALLOWED=NO build
+  build:
+    name: Build Intel E2E app on Apple silicon (no model secrets)
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Select Xcode 26
+        run: |
+          XCODE_PATH="$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -n1)"
+          test -n "$XCODE_PATH"
+          echo "DEVELOPER_DIR=$XCODE_PATH/Contents/Developer" >> "$GITHUB_ENV"
+      - name: Cross-build Debug app and bundled helper for Intel
+        run: |
+          xcodebuild -project Tinycast.xcodeproj -scheme Tinycast -configuration Debug \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" ARCHS=x86_64 ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGNING_ALLOWED=NO build
+      - name: Verify Intel binaries and preserve bundle metadata
+        run: |
+          APP="$RUNNER_TEMP/DerivedData/Build/Products/Debug/Tinycast Dev.app"
+          EXECUTABLE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP/Contents/Info.plist")"
+          for BIN in "$APP/Contents/MacOS/$EXECUTABLE" "$APP/Contents/Helpers/ClipboardTextHelper"; do
+            SLICES="$(lipo -archs "$BIN")"
+            echo "${BIN##*/}: arch=$SLICES"
+            test "$SLICES" = x86_64
+          done
+          mkdir -p "$RUNNER_TEMP/e2e-app"
+          ditto "$APP" "$RUNNER_TEMP/e2e-app/TinycastDev.app"
+          ditto -c -k --keepParent --sequesterRsrc \
+            "$RUNNER_TEMP/e2e-app/TinycastDev.app" "$RUNNER_TEMP/tinycast-e2e-app.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tinycast-e2e-app
+          path: ${{ runner.temp }}/tinycast-e2e-app.zip
+          if-no-files-found: error
+          retention-days: 14
   desktop-capability:
     name: Hosted macOS 26 Intel desktop capability (no model secrets)
     runs-on: macos-26-intel
@@ -87,7 +124,7 @@ jobs:
           path: Tests/Midscene/desktop-health/
           retention-days: 14
   visual:
-    needs: [validation, desktop-capability]
+    needs: [validation, desktop-capability, build]
     # Every PR stays secret-free; repository owners explicitly enable trusted refs.
     if: >-
       vars.MIDSCENE_DESKTOP_ENABLED == 'true' &&
@@ -123,14 +160,19 @@ jobs:
           XCODE_PATH="$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -n1)"
           test -n "$XCODE_PATH"
           echo "DEVELOPER_DIR=$XCODE_PATH/Contents/Developer" >> "$GITHUB_ENV"
-      - name: Build isolated test app
+      - uses: actions/download-artifact@v4
+        with:
+          name: tinycast-e2e-app
+          path: ${{ runner.temp }}/e2e-download
+      - name: Extract test app for this desktop shard
         run: |
-          xcodebuild -project Tinycast.xcodeproj -scheme Tinycast -configuration Debug \
-            -derivedDataPath "$RUNNER_TEMP/DerivedData" CODE_SIGNING_ALLOWED=NO build
+          mkdir -p "$RUNNER_TEMP/e2e-app"
+          ditto -x -k "$RUNNER_TEMP/e2e-download/tinycast-e2e-app.zip" "$RUNNER_TEMP/e2e-app"
+          test -d "$RUNNER_TEMP/e2e-app/TinycastDev.app"
       - name: Run visual shard
         working-directory: Tests/Midscene
         env:
-          TINYCAST_APP_PATH: ${{ runner.temp }}/DerivedData/Build/Products/Debug/Tinycast Dev.app
+          TINYCAST_APP_PATH: ${{ runner.temp }}/e2e-app/TinycastDev.app
           MIDSCENE_DESKTOP_ENABLED: '1'
           MIDSCENE_SHARD: ${{ matrix.shard }}
           MIDSCENE_MODEL_API_KEY: ${{ secrets.MIDSCENE_MODEL_API_KEY }}
@@ -148,7 +190,7 @@ jobs:
           retention-days: 14
   reports:
     needs: visual
-    if: always() && needs.visual.result != 'skipped'
+    if: always() && !cancelled() && needs.visual.result != 'skipped'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -188,7 +230,7 @@ jobs:
         run: exit 1
   publish:
     needs: reports
-    if: always() && needs.reports.result != 'skipped' && vars.MIDSCENE_PAGES_URL != ''
+    if: always() && !cancelled() && needs.reports.result != 'skipped' && vars.MIDSCENE_PAGES_URL != ''
     runs-on: ubuntu-24.04
     permissions:
       contents: read

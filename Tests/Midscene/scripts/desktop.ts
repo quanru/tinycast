@@ -1,11 +1,12 @@
 import { spawn, execFileSync } from 'node:child_process';
+import { createWriteStream } from 'node:fs';
 import { access, cp, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { once } from 'node:events';
 import { setTimeout as delay } from 'node:timers/promises';
 import { agentForComputer } from '@midscene/computer';
+import { stopOwnedProcess } from './process.ts';
 export type DesktopAgent = Awaited<ReturnType<typeof agentForComputer>>;
 
 export async function openCase(id: string, onTeardown: (cleanup: () => Promise<void>) => void, signal: AbortSignal): Promise<DesktopAgent> {
@@ -32,6 +33,8 @@ export async function openCase(id: string, onTeardown: (cleanup: () => Promise<v
   let ownerToolReady = false;
   let child: ReturnType<typeof spawn> | undefined;
   let agent: DesktopAgent | undefined;
+  let startup: Record<string, unknown> = {};
+  const launchLog = createWriteStream(path.join(out, `${id}-launch.log`));
   const ownedFixturePids = () => ownerToolReady
     ? JSON.parse(execFileSync(ownerTool, ['inspect', fixtureBundle, fixture], { encoding: 'utf8', timeout: 10_000 })) as number[]
     : [];
@@ -40,9 +43,10 @@ export async function openCase(id: string, onTeardown: (cleanup: () => Promise<v
     try {
       const publicationErrors: unknown[] = [];
       try {
+        await writeFile(path.join(out, `${id}-startup.json`), JSON.stringify(startup, null, 2));
         await writeFile(path.join(out, `${id}-runtime.json`), JSON.stringify({
           world, bundle, pid: child?.pid, fixtureBundle, fixturePids: ownedFixturePids(),
-          support, searchScopes: [path.dirname(fixture)],
+          support, searchScopes: [path.dirname(fixture)], startup,
         }, null, 2));
       } catch (error) { publicationErrors.push(error); }
       if (agent) {
@@ -56,11 +60,8 @@ export async function openCase(id: string, onTeardown: (cleanup: () => Promise<v
       if (publicationErrors.length) throw new AggregateError(publicationErrors, 'Case artifact publication failed');
     } finally {
       await agent?.destroy().catch(() => undefined);
-      if (child?.pid && child.exitCode === null) {
-        const exited = once(child, 'exit'); child.kill('SIGTERM');
-        const timer = setTimeout(() => child?.kill('SIGKILL'), 5000);
-        await exited; clearTimeout(timer);
-      }
+      await stopOwnedProcess(child);
+      await new Promise<void>(resolve => launchLog.end(resolve));
       if (ownerToolReady) execFileSync(ownerTool, ['stop', fixtureBundle, fixture], { timeout: 15_000 });
       await rm(work, { recursive: true, force: true });
       for (const domain of [bundle, fixtureBundle]) {
@@ -90,33 +91,95 @@ export async function openCase(id: string, onTeardown: (cleanup: () => Promise<v
   }
   execFileSync('defaults', ['write', bundle, 'launcherSearchScopes', '-array', path.dirname(fixture)]);
   execFileSync('defaults', ['write', bundle, 'appearance', '-string', 'dark']);
+  const focusSource = path.join(work, 'focus.swift');
+  const focusTool = path.join(work, 'focus');
+  await writeFile(focusSource, `import AppKit
+import ApplicationServices
+import Foundation
+let args = CommandLine.arguments
+if args.count != 4 { exit(2) }
+let pid = pid_t(args[1])!
+guard let app = NSRunningApplication(processIdentifier: pid),
+    app.bundleIdentifier == args[2],
+    app.bundleURL?.resolvingSymlinksInPath() == URL(fileURLWithPath: args[3]).resolvingSymlinksInPath()
+else { print("{}"); exit(1) }
+let activated = app.activate(options: [])
+let element = AXUIElementCreateApplication(pid)
+func value(_ element: AXUIElement, _ name: String) -> CFTypeRef? {
+    var value: CFTypeRef?
+    AXUIElementCopyAttributeValue(element, name as CFString, &value)
+    return value
+}
+let windows = value(element, kAXWindowsAttribute) as? [AXUIElement] ?? []
+var focusedPID: pid_t = 0
+if let focused = value(AXUIElementCreateSystemWide(), kAXFocusedApplicationAttribute),
+    CFGetTypeID(focused) == AXUIElementGetTypeID() {
+    AXUIElementGetPid(unsafeDowncast(focused, to: AXUIElement.self), &focusedPID)
+}
+let result: [String: Any] = [
+    "pid": Int(pid), "activated": activated, "active": app.isActive,
+    "terminated": app.isTerminated, "windowCount": windows.count, "focusedApplicationPID": Int(focusedPID),
+    "windows": windows.map { window in [
+        "title": value(window, kAXTitleAttribute) as? String ?? "",
+        "role": value(window, kAXRoleAttribute) as? String ?? "",
+        "focused": value(window, kAXFocusedAttribute) as? Bool ?? false
+    ] as [String: Any] }
+]
+let data = try JSONSerialization.data(withJSONObject: result)
+print(String(decoding: data, as: UTF8.self))
+`);
+  execFileSync('xcrun', ['swiftc', '-swift-version', '6', focusSource, '-o', focusTool], { stdio: 'pipe' });
+  agent = await agentForComputer({
+    generateReport: true, reportFileName: id, autoPrintReportMsg: false, replanningCycleLimit: 12,
+    aiContexts: { default: 'You are testing an isolated Tinycast native macOS launcher palette with English text. Operate only the visible Tinycast palette and its E2E Lantern fixture application. Never use Dock, Spotlight, global hotkeys, external websites, clipboard copy/paste, or any other app. Do not quit or relaunch Tinycast. If the test palette is unavailable, report failure.' },
+  });
   const appEnv = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('MIDSCENE_')));
   child = spawn(path.join(copy, 'Contents/MacOS', executable), ['-AppleLanguages', '(en)', '-AppleLocale', 'en_US'], {
-    env: { ...appEnv, TINYCAST_E2E_VISIBLE: '1' }, stdio: 'ignore',
+    env: { ...appEnv, TINYCAST_E2E_VISIBLE: '1' }, stdio: ['ignore', 'pipe', 'pipe'],
   });
+  child.stdout?.pipe(launchLog, { end: false });
+  child.stderr?.pipe(launchLog, { end: false });
   let launchError: Error | undefined;
   child.on('error', error => { launchError = error; });
   let focused = false;
   const focusDeadline = Date.now() + 30_000;
   while (Date.now() < focusDeadline) {
     if (launchError) throw launchError;
-    if (child.exitCode !== null || signal.aborted) throw new Error('Tinycast exited before readiness');
+    if (child.exitCode !== null || child.signalCode !== null || signal.aborted) throw new Error('Tinycast exited before readiness');
     try {
-      const pid = execFileSync('osascript', ['-e', `tell application "System Events"
-        tell (first process whose unix id is ${child.pid})
-          set frontmost to true
-          perform action "AXRaise" of window 1
-        end tell
-        return unix id of first process whose frontmost is true
-      end tell`], { encoding: 'utf8', timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] }).trim();
-      if (pid === String(child.pid)) { focused = true; break; }
-    } catch {}
+      const inspection = JSON.parse(execFileSync(focusTool, [String(child.pid), bundle, copy], {
+        encoding: 'utf8', timeout: 5000, stdio: ['ignore', 'pipe', 'pipe'],
+      })) as Record<string, unknown>;
+      startup = { ...startup, ...inspection };
+      try {
+        execFileSync('osascript', ['-e', `tell application "System Events"
+          tell (first process whose unix id is ${child.pid})
+            set frontmost to true
+            if (count of windows) > 0 then
+              try
+                perform action "AXRaise" of window 1
+              end try
+            end if
+          end tell
+          return unix id of first process whose frontmost is true
+        end tell`], { encoding: 'utf8', timeout: 3000, stdio: ['ignore', 'pipe', 'pipe'] });
+      } catch (error) { startup.lastRaiseError = String(error); }
+      if (Number(inspection.windowCount) > 0 && inspection.focusedApplicationPID === child.pid) {
+        focused = true; break;
+      }
+    } catch (error) { startup.lastInspectionError = String(error); }
     await delay(100);
   }
-  if (!focused) throw new Error('Could not bring the owned Tinycast palette to the foreground; use a Debug build with its E2E launch seam');
-  agent = await agentForComputer({
-    generateReport: true, reportFileName: id, autoPrintReportMsg: false, replanningCycleLimit: 12,
-    aiContexts: { default: 'You are testing an isolated Tinycast native macOS launcher palette with English text. Operate only the visible Tinycast palette and its E2E Lantern fixture application. Never use Dock, Spotlight, global hotkeys, external websites, clipboard copy/paste, or any other app. Do not quit or relaunch Tinycast. If the test palette is unavailable, report failure.' },
-  });
+  await writeFile(path.join(out, `${id}-startup.json`), JSON.stringify(startup, null, 2));
+  if (!focused) {
+    if (child.pid && child.exitCode === null && child.signalCode === null) {
+      try {
+        execFileSync('/usr/bin/sample', [String(child.pid), '2', '-file', path.join(out, `${id}-startup-sample.txt`)], {
+          timeout: 8000, stdio: ['ignore', 'pipe', 'pipe'],
+        });
+      } catch (error) { startup.sampleError = String(error); }
+    }
+    throw new Error('Could not confirm the owned Tinycast palette has a visible window and keyboard focus; see startup diagnostics');
+  }
   return agent;
 }
