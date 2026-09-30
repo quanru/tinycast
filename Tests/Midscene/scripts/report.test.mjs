@@ -84,6 +84,21 @@ test('missing result metadata still publishes native reports and screenshots wit
   assert.ok(summary.includes(`/shard/${first.id}.png`));
   assert.match(summary, /\| missing \|/);
 }));
+test('SDK automatic report copies do not conflict with canonical exports', () => fixture(async (root, dir) => {
+  const [first] = await collect();
+  const automatic = path.join(dir, 'report');
+  await mkdir(automatic);
+  await writeFile(path.join(automatic, `${first.id}.html`), 'SDK automatic report copy');
+  await writeFile(path.join(automatic, `${first.id}.png`), 'SDK screenshot copy');
+  let selected;
+  assert.equal(await assemble({ ...opts(root), merge: async args => {
+    selected = args.htmlPaths;
+    return merge(args);
+  } }), true);
+  assert.ok(selected.every(file => path.dirname(file) === dir));
+  await access(path.join(automatic, `${first.id}.html`));
+  assert.doesNotMatch(await readFile(opts(root).summary, 'utf8'), /Ambiguous/);
+}));
 test('ambiguous artifacts remain intact and are never silently selected', () => fixture(async (root, dir) => {
   const [first] = await collect();
   const duplicate = path.join(root, 'duplicate-shard');

@@ -33,4 +33,19 @@ The GitHub workflow first verifies the `macos-26-intel` desktop, runs model-free
 
 `midscene_run/framework/` contains the native Midscene Test report; every started AI case also exports its native SDK HTML with inline screenshots, final PNG, and runtime metadata recording its isolated PID and bundle. Artifacts are retained on failure for 14 days. A new run removes stale local output before execution. Report merging uses Midscene's native HTML merger; if it fails, the available original reports are preserved and linked, and CI remains failed. Combined publication does not hide missing or failed cases.
 
-The implementation has passed model-free validation locally. Actual hosted desktop and model execution must be assessed from the workflow run, rather than inferred from a successful build.
+All three AI journeys passed on GitHub-hosted `macos-26-intel` in
+[run 36682718562](https://github.com/quanru/tinycast/actions/runs/36682718562).
+Screenshots show the expression result `60`, conversion result `25.4 cm`, and the opened
+E2E Lantern window; runtime metadata confirms separate process and bundle identities.
+That run also exposed report-copy ambiguity and timing races in two existing Swift harnesses;
+the harnesses now wait for explicit completion and port release, and the merger selects only
+canonical exports. Model success is initial integration evidence.
+
+The Intel application is cross-built once on an Apple Silicon runner and shared as a zipped
+build artifact; each Intel visual shard still runs on a fresh VM. Swift harnesses run on
+Apple Silicon. The merger uses the canonical inline HTML exports and excludes automatic SDK
+`report/` copies and framework internals. Without result metadata, available exports remain
+linked and mergeable while the case remains missing.
+
+Pages preserves the configured baseline site and publishes the current run. Earlier hosted report
+URLs expire when the next site replaces them; downloadable artifacts retain the evidence for 14 days.

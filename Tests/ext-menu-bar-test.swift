@@ -746,7 +746,9 @@ extension ExtensionTests {
 
         manager.run(first, command: first.manifest.commands[0])
         manager.run(second, command: second.manifest.commands[0])
-        await settle(750)
+        await settle(until: {
+            boots.suffix(2).map(\.0) == ["first", "second"] && !manager.isRunning
+        })
         check(
             "queued refreshes finish serially",
             boots.suffix(2).map(\.0) == ["first", "second"] && !manager.isRunning)

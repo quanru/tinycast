@@ -17,7 +17,7 @@ export async function assemble({ directory, baseUrl, summary, merge }) {
   async function walk(dir) {
     for (const e of await readdir(dir, { withFileTypes: true })) {
       const file = path.join(dir, e.name);
-      if (e.isDirectory() && e.name !== 'framework') await walk(file);
+      if (e.isDirectory() && !['framework', 'report'].includes(e.name)) await walk(file);
       else if (e.name === 'results.json') {
         for (const r of JSON.parse(await readFile(file, 'utf8'))) {
           if (results.has(r.id)) throw new Error(`Duplicate case result: ${r.id}`);
