@@ -2,6 +2,5 @@ node_modules/
 midscene_run/
 .env*
 !.env.example
-desktop-health.*
 midscene-node-spec.*.md
 desktop-health/

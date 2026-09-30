@@ -5,9 +5,9 @@ let arguments = CommandLine.arguments
 if arguments.count != 4 { exit(2) }
 let mode = arguments[1]
 let bundleID = arguments[2]
-let bundleURL = URL(fileURLWithPath: arguments[3]).standardizedFileURL
+let bundleURL = URL(fileURLWithPath: arguments[3]).resolvingSymlinksInPath()
 let owned = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).filter {
-    $0.bundleURL?.standardizedFileURL == bundleURL
+    $0.bundleURL?.resolvingSymlinksInPath() == bundleURL
 }
 if mode == "inspect" {
     let data = try JSONSerialization.data(withJSONObject: owned.map { Int($0.processIdentifier) })
