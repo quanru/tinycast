@@ -86,11 +86,18 @@ export async function openCase(id: string, onTeardown: (cleanup: () => Promise<v
   execFileSync('codesign', ['--force', '--sign', '-', fixture], { stdio: 'pipe' });
   await mkdir(support, { recursive: true });
   await writeFile(path.join(support, 'onboarded'), '');
-  for (const key of ['clipboardEnabled', 'clipboardTextSearchEnabled', 'calendarEnabled', 'snippetsEnabled', 'supportReminders', 'settingsFileEnabled', 'extensionsEnabled', 'appleShortcutsEnabled', 'aiEnabled', 'mcpEnabled', 'fileSearchEnabled', 'showInMenuBar', 'launcherShowsSuggestions']) {
+  for (const key of ['clipboardEnabled', 'clipboardTextSearchEnabled', 'calendarEnabled', 'snippetsEnabled', 'supportReminders', 'settingsFileEnabled', 'extensionsEnabled', 'appleShortcutsEnabled', 'aiEnabled', 'mcpEnabled', 'fileSearchEnabled', 'showInMenuBar', 'launcherShowsSuggestions', 'automaticallyCheckForUpdates']) {
     execFileSync('defaults', ['write', bundle, key, '-bool', 'false']);
   }
   execFileSync('defaults', ['write', bundle, 'launcherSearchScopes', '-array', path.dirname(fixture)]);
   execFileSync('defaults', ['write', bundle, 'appearance', '-string', 'dark']);
+  execFileSync('defaults', ['write', bundle, 'hyperKeyPhysicalKey', '-string', 'none']);
+  const cache = path.join(homedir(), 'Library/Caches', bundle);
+  await mkdir(cache, { recursive: true });
+  // Swift's default Codable Date uses seconds since 2001; a fresh whole snapshot defers fetching.
+  await writeFile(path.join(cache, 'currency-rates.json'), JSON.stringify({
+    base: 'USD', rates: { USD: 1, EUR: 0.9, BTC: 0.00002 }, fetchedAt: Date.now() / 1000 - 978307200,
+  }));
   const focusSource = path.join(work, 'focus.swift');
   const focusTool = path.join(work, 'focus');
   await writeFile(focusSource, `import AppKit
@@ -139,12 +146,13 @@ print(String(decoding: data, as: UTF8.self))
   });
   const appEnv = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('MIDSCENE_')));
   child = spawn(path.join(copy, 'Contents/MacOS', executable), ['-AppleLanguages', '(en)', '-AppleLocale', 'en_US'], {
-    env: { ...appEnv, TINYCAST_E2E_VISIBLE: '1' }, stdio: ['ignore', 'pipe', 'pipe'],
+    env: appEnv, stdio: ['ignore', 'pipe', 'pipe'],
   });
   child.stdout?.pipe(launchLog, { end: false });
   child.stderr?.pipe(launchLog, { end: false });
   let launchError: Error | undefined;
   child.on('error', error => { launchError = error; });
+  let lastReopenAt = 0;
   startup = await waitForOwnedWindow({
     pid: child.pid!,
     checkAlive: () => {
@@ -160,7 +168,14 @@ print(String(decoding: data, as: UTF8.self))
       const activated = JSON.parse(execFileSync(focusTool, [String(child!.pid), bundle, copy, 'activate'], {
         encoding: 'utf8', timeout: 5000, stdio: ['ignore', 'pipe', 'pipe'],
       })) as Record<string, unknown>;
-      if (Number(activated.windowCount) > 0 && activated.focusedApplicationPID === child!.pid) return activated;
+      if (Number(activated.windowCount) === 0) {
+        if (Date.now() - lastReopenAt >= 1000) {
+          execFileSync('/usr/bin/open', ['-a', copy], { timeout: 5000, stdio: 'pipe' });
+          lastReopenAt = Date.now();
+        }
+        return { ...activated, reopenRequested: true };
+      }
+      if (activated.focusedApplicationPID === child!.pid) return activated;
       execFileSync('osascript', ['-e', `tell application "System Events"
         tell (first process whose unix id is ${child!.pid})
           set frontmost to true

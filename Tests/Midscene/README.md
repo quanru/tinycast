@@ -14,7 +14,7 @@ palette, so its application journeys use the computer agent rather than a browse
 
 The first cases cover arithmetic, offline unit conversion, and searching/opening a synthetic native application named E2E Lantern. They do not use an installed application, real clipboard history, external websites, or the user's Tinycast data.
 
-Each case copies the Debug application into its own temporary directory, assigns a unique `com.tinycast.app.midscene.*` bundle identifier, and prepares a private defaults domain, Application Support directory, cache and launcher search scope. Its onboarding marker and feature defaults are fixture setup. The Debug-only launch seam requires both that bundle prefix and `TINYCAST_E2E_VISIBLE=1`; it opens the real palette and disables background network fetches and global hotkey registration. Release behavior is unchanged. Teardown terminates only the launched Tinycast PID and fixture applications matching both the exact case bundle and bundle URL.
+Each case copies the Debug application into its own temporary directory, assigns a unique `com.tinycast.app.midscene.*` bundle identifier, and prepares a private defaults domain, Application Support directory, cache and launcher search scope. Its onboarding marker and feature defaults are fixture setup. The app sources are unmodified. The external runner uses the existing application reopen event to open the real palette, sets existing preferences to disable automatic updates and Hyper Key, and starts with no shortcut bindings. It seeds a fresh complete exchange-rate cache so the existing rate store defers its next refresh; this is fixture setup, not a claim that all app networking is blocked. Teardown terminates only the launched Tinycast PID and fixture applications matching both the exact case bundle and bundle URL.
 
 ## Checks without a model
 
@@ -72,6 +72,6 @@ within a 900 MiB site limit. Original report artifacts remain available for 14 d
 artifacts retain history for 90 days. Shard, combined and Pages artifact names include the attempt,
 and reruns clear prior output before merging so stale evidence is not mixed into new results.
 
-Startup checks the owned application window and focused PID before attempting to raise it. An already ready palette incurs no activation or AppleScript call. Otherwise the owned app is activated natively before attempting AppleScript as a fallback. Startup artifacts record final `ready` and `inspection` separately from historical `attempts` and `warnings`.
+Startup checks the owned application window and focused PID before attempting to raise it. An already ready palette incurs no activation or AppleScript call. Otherwise the owned app is activated natively. When it has no window, the runner opens its exact bundle path to send the normal reopen event, throttled to once per second. AppleScript is only a fallback for an existing unfocused window. Startup artifacts record final `ready` and `inspection` separately from historical `attempts` and `warnings`.
 
 The launcher journey uses a synthetic, isolated AppKit fixture. The visible fixture label does not prove its launch origin; the keyboard action trace and owned fixture PID provide that evidence. This case does not cover the global hotkey, the real application index, or a Release distribution package.
