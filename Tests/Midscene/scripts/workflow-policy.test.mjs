@@ -73,3 +73,8 @@ test('result jobs survive aggregation/publication failures but stay absent on PR
   for (const name of ['reports', 'available-results', 'report-results', 'prepare-pages']) assert.equal(runs(name, { github: { event_name: 'pull_request' }, inputs: { report_source_run_id: '123' } }), false);
   assert.equal(runs('report-results', { cancelled: true }), false);
 });
+
+test('visual shards retain reports without writing duplicate user case summaries', () => {
+  assert.doesNotMatch(job('visual'), /GITHUB_STEP_SUMMARY|npm run report|Add shard results/);
+  assert.match(job('desktop-capability'), /GITHUB_STEP_SUMMARY/);
+});

@@ -13,7 +13,7 @@ test('Rome layout places attention first and collapses passes with exact screens
   assert.ok(markdown.indexOf('Failed \\| &lt;case&gt;') < markdown.indexOf('<details>'));
   assert.ok(markdown.indexOf('Missing case') < markdown.indexOf('<details>'));
   assert.ok(markdown.indexOf('Passed case') > markdown.indexOf('<details>'));
-  assert.match(markdown, /Shard \| Case \| Screenshot \| Status \/ reason \| Duration/);
+  assert.match(markdown, /Shard \| Case \| Report \| Screenshot \| Status \/ reason \| Duration/);
   assert.match(markdown, /width="160"/);
   assert.match(markdown, /href="https:\/\/reports.test\/framework\/index.html#runner-step=actual%3Astep"/);
   assert.match(markdown, /1m 1s/);

@@ -205,5 +205,14 @@ test('publication-independent Summary acknowledges the native artifact without c
   const summary = await readFile(opts(root).summary, 'utf8');
   assert.match(summary, /Native Midscene Test report included in the artifact/);
   assert.match(summary, /Pages publication: \*\*pending\*\*/);
-  assert.doesNotMatch(summary, /<img|Open the Midscene Test report/);
+  assert.doesNotMatch(summary, /<img|Open the Midscene Test report|\| Shard \||<details>|Appendix: passed/);
+}));
+
+test('published Summary exposes shard counts and an explicit report column with exact screenshots', () => fixture(async (root, dir) => {
+  await assemble(opts(root));
+  const summary = await readFile(opts(root).summary, 'utf8');
+  assert.match(summary, /### Shard results/);
+  assert.match(summary, /\| Shard \| Case \| Report \| Screenshot \| Status \| Duration \|/);
+  assert.match(summary, /\[Report\]\(https:\/\/example.test\/runs\/123\/2\/shard\/calculator-expression.html\)/);
+  assert.match(summary, /<img src="https:\/\/example.test\/runs\/123\/2\/shard\/calculator-expression.png"[^>]+width="160"/);
 }));

@@ -208,14 +208,6 @@ jobs:
           path: Tests/Midscene/midscene_run/
           if-no-files-found: warn
           retention-days: 14
-      - name: Add shard results to the job Summary
-        if: always()
-        working-directory: Tests/Midscene
-        env:
-          MIDSCENE_SUMMARY_SHARD: ${{ matrix.shard }}
-          MIDSCENE_PRODUCER_RESULT: ${{ steps.run-shard.outcome == 'success' && steps.upload-shard.outcome == 'success' && 'success' || 'failure' }}
-          MIDSCENE_PUBLICATION_RESULT: pending
-        run: npm run report
   reports:
     name: Aggregate native reports without Pages
     needs: visual

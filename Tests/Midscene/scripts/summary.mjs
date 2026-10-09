@@ -67,7 +67,7 @@ export function renderSummary({ product = 'Tinycast', cases, models = [], runUrl
     const name = reportAvailable ? `[${cell(c.title)}](${c.reportUrl})` : cell(c.title);
     const screenshot = reportAvailable && c.screenshotUrl ? `<a href="${html(c.reportUrl)}"><img src="${html(c.screenshotUrl)}" alt="${html(c.title)}" width="160"></a>` : '—';
     const status = c.status === 'passed' ? '✅ Passed' : c.status === 'not-run' ? '⏭️ Not run' : c.status === 'missing' ? '⚠️ Missing' : c.status === 'incomplete' ? '⚠️ Incomplete' : '❌ Failed';
-    return `| ${cell(c.shard)} | ${name} | ${screenshot} | ${cell(`${status}${c.reason ? `: ${safeReason(c.reason)}` : ''}`)} | ${duration(c.durationMs)} |`;
+    return `| ${cell(c.shard)} | ${name} | ${reportAvailable ? `[Report](${c.reportUrl})` : '—'} | ${screenshot} | ${cell(`${status}${c.reason ? `: ${safeReason(c.reason)}` : ''}`)} | ${duration(c.durationMs)} |`;
   };
   const lines = [`## ${product} × Midscene · ${complete ? 'passed' : 'failure captured'}`, '', `**${complete ? '✅ ' : ''}${attention} need attention · ${passed.length} passed**`, '', `**Models:** ${models.length ? models.map(cell).join(', ') : 'not recorded'}`, ''];
   const nativeLink = nativeReportUrl ? `**[Open the Midscene Test report](${nativeReportUrl})**` : nativeReportAvailable ? 'Native Midscene Test report included in the artifact.' : 'Native Midscene report unavailable; individual case reports remain available.';
@@ -78,10 +78,20 @@ export function renderSummary({ product = 'Tinycast', cases, models = [], runUrl
   }
   if (reportResult) lines.push(`Report aggregation: **${cell(reportResult)}**.`, '');
   if (publicationResult) lines.push(`Pages publication: **${cell(publicationResult)}**.${nativeReportUrl ? '' : ' Web report links are unavailable; download the available artifacts.'}`, '');
-  if (!cases.some(c => c.reportUrl)) lines.push('Download the report artifact to inspect native HTML reports and screenshots.', '');
+  if (!cases.some(c => c.reportUrl)) {
+    lines.push('Download the report artifact to inspect native HTML reports and screenshots.', '');
+    for (const issue of infrastructure) lines.push(`- ${cell(safeReason(issue))}`);
+    for (const failure of failures) lines.push(`- ${cell(failure.title)}: ${cell(failure.status === 'missing' ? 'Missing' : failure.status)}${failure.reason ? `: ${cell(safeReason(failure.reason))}` : ''}`);
+    return lines.join('\n');
+  }
+  const shards = [...new Set(cases.map(c => c.shard))];
+  lines.push('### Shard results', '', '| Shard | Passed | Needs attention |', '|:--|--:|--:|', ...shards.map(shard => {
+    const results = cases.filter(c => c.shard === shard);
+    return `| ${cell(shard)} | ${results.filter(c => c.status === 'passed').length} | ${results.filter(c => c.status !== 'passed').length} |`;
+  }), '');
   if (attention) {
-    lines.push('### Needs attention', '', '| Shard | Case | Screenshot | Status / reason | Duration |', '|:--|:--|:--|:--|--:|', ...infrastructure.map(issue => `| Workflow | — | — | ❌ ${cell(safeReason(issue))} | — |`), ...failures.sort((a, b) => Number(a.status === 'not-run') - Number(b.status === 'not-run')).map(row), '');
+    lines.push('### Needs attention', '', '| Shard | Case | Report | Screenshot | Status / reason | Duration |', '|:--|:--|:--|:--|:--|--:|', ...infrastructure.map(issue => `| Workflow | — | — | — | ❌ ${cell(safeReason(issue))} | — |`), ...failures.sort((a, b) => Number(a.status === 'not-run') - Number(b.status === 'not-run')).map(row), '');
   } else lines.push(`🎉 All ${passed.length} cases passed.`, '');
-  lines.push('<details>', `<summary>Appendix: passed cases (${passed.length})</summary>`, '', '| Shard | Case | Screenshot | Status | Duration |', '|:--|:--|:--|:--|--:|', ...passed.map(row), '', '</details>', '', 'Click a screenshot or case name to open its native report; framework reports open the recorded step.', '');
+  lines.push('<details>', `<summary>Appendix: passed cases (${passed.length})</summary>`, '', '| Shard | Case | Report | Screenshot | Status | Duration |', '|:--|:--|:--|:--|:--|--:|', ...passed.map(row), '', '</details>', '', 'Click a screenshot or case name to open its native report; framework reports open the recorded step.', '');
   return lines.join('\n');
 }
