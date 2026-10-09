@@ -187,3 +187,23 @@ test('complete framework inventory merges native Test reports once instead of st
   assert.equal(await assemble({ ...opts(root), merge: async args => { selected = args.htmlPaths; return merge(args); } }), true);
   assert.deepEqual(selected, [index]);
 }));
+test('read-only publication summaries preserve merged reports and expose aggregation/source/status', () => fixture(async root => {
+  await mkdir(path.join(root, 'native'));
+  const native = path.join(root, 'native/index.html');
+  await writeFile(native, 'native report must stay byte-for-byte unchanged');
+  assert.equal(await assemble({ ...opts(root), runUrl: 'https://github.com/example/tinycast/actions/runs/456', sourceRunId: '123', reportResult: 'success', publicationResult: 'skipped' }), true);
+  assert.equal(await readFile(native, 'utf8'), 'native report must stay byte-for-byte unchanged');
+  const summary = await readFile(opts(root).summary, 'utf8');
+  assert.match(summary, /runs\/123#artifacts/);
+  assert.match(summary, /no new model calls/);
+  assert.match(summary, /Report aggregation: \*\*success\*\*/);
+  assert.match(summary, /Pages publication: \*\*skipped\*\*/);
+}));
+test('publication-independent Summary acknowledges the native artifact without claiming hosted links', () => fixture(async root => {
+  await writeFile(path.join(root, 'native.html'), 'retained native report');
+  assert.equal(await assemble({ ...opts(root), baseUrl: '', publicationResult: 'pending' }), true);
+  const summary = await readFile(opts(root).summary, 'utf8');
+  assert.match(summary, /Native Midscene Test report included in the artifact/);
+  assert.match(summary, /Pages publication: \*\*pending\*\*/);
+  assert.doesNotMatch(summary, /<img|Open the Midscene Test report/);
+}));

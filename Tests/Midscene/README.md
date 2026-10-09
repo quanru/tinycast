@@ -8,7 +8,8 @@ rejects missing assertions and actions left after the last assertion, including 
 
 The design borrows per-case isolation, trusted model execution, shard artifacts and native report
 handling from [Rome #466](https://github.com/rome-os/rome/pull/466) and
-[its follow-up #551](https://github.com/rome-os/rome/pull/551). Tinycast has a native floating
+[its follow-up #551](https://github.com/rome-os/rome/pull/551). Report publication follows
+[Rome #678](https://github.com/rome-os/rome/pull/678) at `1fe1e81231744f135f49f6b00dfb7c20240a1e4a`. Tinycast has a native floating
 palette, so its application journeys use the computer agent rather than a browser context.
 
 The first cases cover arithmetic, offline unit conversion, and searching/opening a synthetic native application named E2E Lantern. They do not use an installed application, real clipboard history, external websites, or the user's Tinycast data.
@@ -31,13 +32,26 @@ Use a dedicated macOS 26 desktop with Accessibility, Screen Recording and System
 
 Build the Debug scheme and provide `TINYCAST_APP_PATH` pointing to `Tinycast Dev.app`. Populate the four `MIDSCENE_MODEL_*` keys shown in `.env.example` through your CI secret store or process environment. The runner does not source configuration files; credentials are never passed to Tinycast or its fixture application. Opt in with `MIDSCENE_DESKTOP_ENABLED=1` and run `npm test`. `MIDSCENE_SHARD=calculator` or `launcher` selects one shard. Midscene itself owns lifecycle, timeout, progress and case status.
 
-The GitHub workflow first verifies the `macos-26-intel` desktop, runs model-free validation for PRs, and only grants model secrets to the visual step on the default branch, an explicitly trusted owner-configured ref, or a manual dispatch of one of those refs. Set repository variable `MIDSCENE_DESKTOP_ENABLED=true` to opt in. For initial branch validation, set `MIDSCENE_TRUSTED_REF` to its complete ref, such as `refs/heads/test/midscene-e2e`, then clear it after validation. Optional `MIDSCENE_PAGES_URL` ending in `/midscene` publishes precise case report and screenshot URLs in the Summary table; leave it unset to use downloadable artifacts. If a Pages site already exists, configure `MIDSCENE_PAGES_PRESERVE_REF` to its static source branch so CI preserves those files and adds reports under `/midscene`.
+The GitHub workflow first verifies the `macos-26-intel` desktop and runs model-free validation for PRs. Model secrets are granted only to the visual step on upstream `abue-ammar/tinycast` main, or an explicit manual dispatch in a fork. Set `MIDSCENE_DESKTOP_ENABLED=true` to opt in. Fork pushes and every PR remain secret-free. Recovery dispatches with `report_source_run_id` skip application builds, desktop checks and all model execution.
+
+Report aggregation and artifacts work independently of Pages. Fork publication additionally requires `MIDSCENE_PUBLISH_REPO` to equal the full repository name and a dispatch with `publish_pages=true`. Pages must already use GitHub Actions; CI reads its configuration with `enablement: false` and never enables Pages or changes repository settings. Configure `MIDSCENE_PAGES_PRESERVE_REF` to the repository's static site branch, such as `gh-pages`, to preserve its root website. Reports live under `/midscene/runs/<run>/<attempt>/`; verified deployment URLs, rather than speculative pre-publication URLs, appear in the final Summary.
 
 ## Reports
 
 `midscene_run/framework/` contains the native Midscene Test report; every started AI case also exports its native SDK HTML with inline screenshots, final PNG, and runtime metadata recording its isolated PID and bundle. Artifacts are retained on failure for 14 days. A new run removes stale local output before execution. Report merging uses Midscene's native HTML merger; if it fails, the available original reports are preserved and linked, and CI remains failed. Combined publication does not hide missing or failed cases.
 
 Each visual shard and the combined report job use the Rome Summary layout: attention and passed counts, recorded model names, native report and artifact links, followed by failed, missing and not-run cases. Passed cases appear in a collapsed appendix. Tables show shard, case, a 160px screenshot, status/reason and duration. Case names and screenshots link to the recorded step in the native Test report when available; standalone HTML exports remain the fallback.
+
+`available-results` displays the saved aggregation Summary without depending on Pages jobs, tokens or environment approval. `report-results` reads available reports after publication and shows aggregation and deployment status; it does not remerge or delete native HTML. With Pages disabled or unavailable, counts, failure reasons and downloadable artifacts remain usable. Missing or failed cases never become passes because publication succeeds.
+
+To rebuild a report without calling a model:
+
+```sh
+gh workflow run midscene.yml --ref test/midscene-e2e \
+  -f report_source_run_id=COMPLETED_RUN_ID -f publish_pages=false
+```
+
+Source runs must be completed runs of this workflow in the same repository, including the same head repository. Upstream sources require a main commit with verified ancestry and a trusted push/schedule/manual event. Fork sources require a manual dispatch; legacy fork push artifacts and PR artifacts are intentionally rejected. Artifact download follows successful authentication and uses the source's actual attempt. History lookup applies the same policy and paginates both workflow runs and artifacts, selecting the latest retained attempt.
 
 All three AI journeys passed on GitHub-hosted `macos-26-intel` in
 [run 36682718562](https://github.com/quanru/tinycast/actions/runs/36682718562).
@@ -49,9 +63,11 @@ canonical exports. Model success is initial integration evidence.
 
 The Intel application is cross-built once on an Apple Silicon runner and shared as a zipped
 build artifact; each Intel visual shard still runs on a fresh VM. Swift harnesses run on
-Apple Silicon. The merger uses the canonical inline HTML exports and excludes automatic SDK
-`report/` copies and framework internals. Without result metadata, available exports remain
+Apple Silicon. The merger prefers complete native Test reports, falling back to canonical inline
+HTML exports and excluding automatic SDK `report/` copies. Without result metadata, available exports remain
 linked and mergeable while the case remains missing.
 
-Pages preserves the configured baseline site and publishes the current run. Earlier hosted report
-URLs expire when the next site replaces them; downloadable artifacts retain the evidence for 14 days.
+Pages preserves the configured root site and trusted report history for up to three recent runs
+within a 900 MiB site limit. Original report artifacts remain available for 14 days; prepared Pages
+artifacts retain history for 90 days. Shard, combined and Pages artifact names include the attempt,
+and reruns clear prior output before merging so stale evidence is not mixed into new results.

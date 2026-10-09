@@ -3,12 +3,14 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { collect } from './collect.mjs';
 import { artifactUrl, evidenceFor, renderSummary, safeReason } from './summary.mjs';
-export async function assemble({ directory, baseUrl, summary, merge, shard, runUrl = '', producerResult = 'success' }) {
+export async function assemble({ directory, baseUrl = '', summary, merge, shard, runUrl = '', producerResult = 'success', reportResult, publicationResult, sourceRunId }) {
   await mkdir(directory, { recursive: true });
   // Remove only generated merge output; original case artifacts always survive.
   const native = path.join(directory, 'native');
-  await rm(native, { recursive: true, force: true });
-  await rm(`${native}.html`, { force: true });
+  if (merge) {
+    await rm(native, { recursive: true, force: true });
+    await rm(`${native}.html`, { force: true });
+  }
   const cases = await collect(shard);
   const knownArtifacts = new Set(cases.flatMap(c => [`${c.id}.html`, `${c.id}.png`]));
   const candidates = new Map();
@@ -112,15 +114,21 @@ export async function assemble({ directory, baseUrl, summary, merge, shard, runU
     await rm(`${native}.html`, { force: true });
     warnings.push(`Native report merge failed: ${safeReason(error.message ?? error)}. Individual reports remain available.`);
   }
-  const headerReport = merged?.mergedReportPath ?? (shard && frameworkReports.length === 1 ? frameworkReports[0] : undefined);
+  let headerReport = merged?.mergedReportPath;
+  if (!merge) {
+    for (const file of [path.join(native, 'index.html'), `${native}.html`]) {
+      try { await access(file); headerReport = file; break; } catch {}
+    }
+  }
+  headerReport ??= shard && frameworkReports.length === 1 ? frameworkReports[0] : undefined;
   if (producerResult !== 'success' || warnings.length) complete = false;
-  await writeFile(summary, renderSummary({ product: 'Tinycast', cases: rows, models: [...models].sort(), nativeReportUrl: headerReport && baseUrl ? url(headerReport) : undefined, runUrl, producerResult, issues: warnings }));
+  await writeFile(summary, renderSummary({ product: 'Tinycast', cases: rows, models: [...models].sort(), nativeReportUrl: headerReport && baseUrl ? url(headerReport) : undefined, nativeReportAvailable: Boolean(headerReport), runUrl, producerResult, issues: warnings, reportResult, publicationResult, sourceRunId }));
   return complete;
 }
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const { mergeReportFiles } = await import('@midscene/core');
   const shard = process.env.MIDSCENE_SUMMARY_SHARD;
   const runUrl = process.env.GITHUB_REPOSITORY ? `${process.env.GITHUB_SERVER_URL ?? 'https://github.com'}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}` : '';
-  const ok = await assemble({ directory: path.resolve(process.argv[2] ?? 'midscene_run'), baseUrl: process.env.MIDSCENE_REPORT_URL ?? '', summary: process.env.GITHUB_STEP_SUMMARY ?? 'summary.md', merge: shard ? undefined : mergeReportFiles, shard, runUrl, producerResult: process.env.MIDSCENE_PRODUCER_RESULT ?? 'success' });
+  const ok = await assemble({ directory: path.resolve(process.argv.slice(2).find(value => !value.startsWith('--')) ?? 'midscene_run'), baseUrl: process.env.MIDSCENE_REPORT_URL ?? '', summary: process.env.MIDSCENE_SUMMARY_OUTPUT ?? process.env.GITHUB_STEP_SUMMARY ?? 'summary.md', merge: shard || process.argv.includes('--summary-only') ? undefined : mergeReportFiles, shard, runUrl, producerResult: process.env.MIDSCENE_PRODUCER_RESULT ?? 'success', reportResult: process.env.MIDSCENE_REPORT_RESULT, publicationResult: process.env.MIDSCENE_PUBLICATION_RESULT, sourceRunId: process.env.REPORT_SOURCE_RUN_ID });
   if (!ok) process.exitCode = 1;
 }
