@@ -1,0 +1,51 @@
+name: Swift harness timing comparison
+on:
+  push:
+    branches: [test/swift-harness-timing]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  measure:
+    runs-on: macos-26
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        variant: [main, synchronization]
+        trial: [1, 2, 3]
+        include:
+          - variant: main
+            ref: 9e6beba99aacedf50bbf42c1a5107b981ffb37ab
+          - variant: synchronization
+            ref: 6a2c7402f4da5b936f6a0557b3b69ded4e631a9b
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.ref }}
+          path: source
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Select Xcode 26
+        run: |
+          XCODE_PATH="$(find /Applications -maxdepth 1 -name 'Xcode_26*.app' | sort -V | tail -n1)"
+          test -n "$XCODE_PATH"
+          echo "DEVELOPER_DIR=$XCODE_PATH/Contents/Developer" >> "$GITHUB_ENV"
+      - name: Measure the unchanged suite on a fresh VM
+        env:
+          VARIANT: ${{ matrix.variant }}
+          TRIAL: ${{ matrix.trial }}
+        run: python3 .github/scripts/measure-harness.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: timing-${{ matrix.variant }}-${{ matrix.trial }}
+          path: measurements/
+          retention-days: 14
+          if-no-files-found: error
